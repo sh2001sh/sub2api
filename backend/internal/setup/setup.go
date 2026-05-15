@@ -531,6 +531,80 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 	return defaultValue
 }
 
+func applyConnectionURLEnvOverrides(cfg *SetupConfig) error {
+	if cfg == nil {
+		return nil
+	}
+
+	if raw, ok := os.LookupEnv("DATABASE_URL"); ok && strings.TrimSpace(raw) != "" {
+		parsed, err := config.ParseDatabaseURL(raw)
+		if err != nil {
+			return fmt.Errorf("parse DATABASE_URL: %w", err)
+		}
+		cfg.Database.Host = parsed.Host
+		cfg.Database.Port = parsed.Port
+		cfg.Database.User = parsed.User
+		cfg.Database.Password = parsed.Password
+		cfg.Database.DBName = parsed.DBName
+		cfg.Database.SSLMode = parsed.SSLMode
+	}
+	if value, ok := os.LookupEnv("DATABASE_HOST"); ok {
+		cfg.Database.Host = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DATABASE_PORT"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.Database.Port = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("DATABASE_USER"); ok {
+		cfg.Database.User = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DATABASE_PASSWORD"); ok {
+		cfg.Database.Password = value
+	}
+	if value, ok := os.LookupEnv("DATABASE_DBNAME"); ok {
+		cfg.Database.DBName = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DATABASE_SSLMODE"); ok {
+		cfg.Database.SSLMode = strings.TrimSpace(value)
+	}
+
+	if raw, ok := os.LookupEnv("REDIS_URL"); ok && strings.TrimSpace(raw) != "" {
+		parsed, err := config.ParseRedisURL(raw)
+		if err != nil {
+			return fmt.Errorf("parse REDIS_URL: %w", err)
+		}
+		cfg.Redis.Host = parsed.Host
+		cfg.Redis.Port = parsed.Port
+		cfg.Redis.Password = parsed.Password
+		cfg.Redis.DB = parsed.DB
+		cfg.Redis.EnableTLS = parsed.EnableTLS
+	}
+	if value, ok := os.LookupEnv("REDIS_HOST"); ok {
+		cfg.Redis.Host = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("REDIS_PORT"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.Redis.Port = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("REDIS_PASSWORD"); ok {
+		cfg.Redis.Password = value
+	}
+	if value, ok := os.LookupEnv("REDIS_DB"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.Redis.DB = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("REDIS_ENABLE_TLS"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(value)); err == nil {
+			cfg.Redis.EnableTLS = parsed
+		}
+	}
+
+	return nil
+}
+
 // AutoSetupFromEnv performs automatic setup using environment variables
 // This is designed for Docker deployment where all config is passed via env vars
 func AutoSetupFromEnv() error {
@@ -574,6 +648,9 @@ func AutoSetupFromEnv() error {
 			ExpireHour: getEnvIntOrDefault("JWT_EXPIRE_HOUR", 24),
 		},
 		Timezone: tz,
+	}
+	if err := applyConnectionURLEnvOverrides(cfg); err != nil {
+		return err
 	}
 
 	// Generate JWT secret if not provided

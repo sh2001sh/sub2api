@@ -12,10 +12,22 @@ func persistAccountCredentials(ctx context.Context, repo AccountRepository, acco
 	}
 
 	account.Credentials = cloneCredentials(credentials)
+	var err error
 	if updater, ok := any(repo).(accountCredentialsUpdater); ok {
-		return updater.UpdateCredentials(ctx, account.ID, account.Credentials)
+		err = updater.UpdateCredentials(ctx, account.ID, account.Credentials)
+	} else {
+		err = repo.Update(ctx, account)
 	}
-	return repo.Update(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	if syncer := GlobalCPAStoreSyncer(); syncer != nil {
+		if err := syncer.SyncAccountUpsert(ctx, account); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func cloneCredentials(in map[string]any) map[string]any {

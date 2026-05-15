@@ -270,10 +270,13 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner)
 	stateRepo := cpaimport.NewStateRepo(db)
 	bootstrapService := cpaimport.NewBootstrapService(stateRepo, userRepository, adminService, apiKeyRepository, apiKeyService)
+	syncService := cpaimport.NewSyncService(proxyRepository)
+	syncRuntime := cpaimport.ConfigureServiceSync(adminService, apiKeyService, syncService)
 	application := &Application{
 		Server:             httpServer,
 		Cleanup:            v,
 		CPAImportBootstrap: bootstrapService,
+		CPAImportSync:      syncRuntime,
 	}
 	return application, nil
 }
@@ -284,6 +287,7 @@ type Application struct {
 	Server             *http.Server
 	Cleanup            func()
 	CPAImportBootstrap *cpaimport.BootstrapService
+	CPAImportSync      *cpaimport.SyncRuntime
 }
 
 func providePrivacyClientFactory() service.PrivacyClientFactory {

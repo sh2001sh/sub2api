@@ -28,6 +28,7 @@ type Application struct {
 	Server             *http.Server
 	Cleanup            func()
 	CPAImportBootstrap *cpaimport.BootstrapService
+	CPAImportSync      *cpaimport.SyncRuntime
 }
 
 func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
@@ -56,7 +57,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		provideCleanup,
 
 		// Application struct
-		wire.Struct(new(Application), "Server", "Cleanup", "CPAImportBootstrap"),
+		wire.Struct(new(Application), "Server", "Cleanup", "CPAImportBootstrap", "CPAImportSync"),
 	)
 	return nil, nil
 }

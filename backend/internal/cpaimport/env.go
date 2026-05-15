@@ -8,14 +8,21 @@ import (
 
 // LoadConfigFromEnv reads CPA import bootstrap configuration from environment variables.
 func LoadConfigFromEnv() (Config, error) {
+	enabled := false
+	if rawEnabled, exists := os.LookupEnv("CPA_IMPORT_ENABLED"); exists {
+		enabled = parseBool(rawEnabled)
+	}
 	cfg := Config{
-		Enabled:   parseBool(os.Getenv("CPA_IMPORT_ENABLED")),
 		SourceDir: strings.TrimSpace(os.Getenv("CPA_IMPORT_SOURCE_DIR")),
 		GitURL:    strings.TrimSpace(os.Getenv("GITSTORE_GIT_URL")),
 		GitUser:   strings.TrimSpace(os.Getenv("GITSTORE_GIT_USERNAME")),
 		GitToken:  strings.TrimSpace(os.Getenv("GITSTORE_GIT_TOKEN")),
 		GitBranch: strings.TrimSpace(os.Getenv("GITSTORE_GIT_BRANCH")),
 	}
+	if _, exists := os.LookupEnv("CPA_IMPORT_ENABLED"); !exists {
+		enabled = cfg.SourceDir != "" || cfg.GitURL != ""
+	}
+	cfg.Enabled = enabled
 	if !cfg.Enabled {
 		return cfg, nil
 	}

@@ -4,7 +4,7 @@
 
 Use `sub2api` as the only online gateway and import legacy `MyCPA` data at startup so existing CPA data can continue to work without keeping `MyCPA` in the request path.
 
-This implementation targets the first usable compatibility phase:
+This implementation now covers the first usable compatibility phase plus Git-backed write-back:
 
 - Import legacy `auths/*.json` into `sub2api` accounts
 - Import legacy `config/config.yaml` top-level `api-keys` into `sub2api` API keys
@@ -13,6 +13,7 @@ This implementation targets the first usable compatibility phase:
   - `GITSTORE_GIT_URL`
   - `GITSTORE_GIT_USERNAME`
   - `GITSTORE_GIT_TOKEN`
+- Write compatible account/API key changes back to the same Git store
 - Keep `sub2api` full distribution logic as the only runtime distributor
 
 ## Core Decision
@@ -59,13 +60,15 @@ Import runs before the server starts listening, so the first request already see
 - Persist import mapping state in database
 - Re-import on each startup without duplicating data
 - Best-effort import per-auth proxy URLs into `sub2api` proxy records
+- Write account create/update/delete back to `auths/*.json`
+- Write synthetic legacy user API key create/update/delete back to `config/config.yaml`
+- Write runtime credential refresh updates back through the shared credential persistence path
 
 ### Not included in phase 1
 
 - Usage history migration
 - Subscription history migration
 - One-key-one-user legacy split
-- Bidirectional sync back to CPA
 - Live watcher or hot sync
 - Full migration of every niche legacy provider extension
 

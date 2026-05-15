@@ -87,3 +87,50 @@ func TestWriteConfigFileKeepsDefaultUserConcurrency(t *testing.T) {
 		t.Fatalf("config missing default user concurrency, got:\n%s", string(data))
 	}
 }
+
+func TestApplyConnectionURLEnvOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://dbuser:dbpass@db.example.com:6543/appdb?sslmode=require")
+	t.Setenv("REDIS_URL", "rediss://:redispass@redis.example.com:6380/2")
+	t.Setenv("DATABASE_HOST", "override-db.example.com")
+	t.Setenv("REDIS_DB", "5")
+
+	cfg := &SetupConfig{}
+	if err := applyConnectionURLEnvOverrides(cfg); err != nil {
+		t.Fatalf("applyConnectionURLEnvOverrides() error = %v", err)
+	}
+
+	if cfg.Database.Host != "override-db.example.com" {
+		t.Fatalf("database host = %q, want %q", cfg.Database.Host, "override-db.example.com")
+	}
+	if cfg.Database.Port != 6543 {
+		t.Fatalf("database port = %d, want 6543", cfg.Database.Port)
+	}
+	if cfg.Database.User != "dbuser" {
+		t.Fatalf("database user = %q, want %q", cfg.Database.User, "dbuser")
+	}
+	if cfg.Database.Password != "dbpass" {
+		t.Fatalf("database password = %q, want %q", cfg.Database.Password, "dbpass")
+	}
+	if cfg.Database.DBName != "appdb" {
+		t.Fatalf("database name = %q, want %q", cfg.Database.DBName, "appdb")
+	}
+	if cfg.Database.SSLMode != "require" {
+		t.Fatalf("database sslmode = %q, want %q", cfg.Database.SSLMode, "require")
+	}
+
+	if cfg.Redis.Host != "redis.example.com" {
+		t.Fatalf("redis host = %q, want %q", cfg.Redis.Host, "redis.example.com")
+	}
+	if cfg.Redis.Port != 6380 {
+		t.Fatalf("redis port = %d, want 6380", cfg.Redis.Port)
+	}
+	if cfg.Redis.Password != "redispass" {
+		t.Fatalf("redis password = %q, want %q", cfg.Redis.Password, "redispass")
+	}
+	if cfg.Redis.DB != 5 {
+		t.Fatalf("redis db = %d, want 5", cfg.Redis.DB)
+	}
+	if !cfg.Redis.EnableTLS {
+		t.Fatalf("redis enable_tls = false, want true")
+	}
+}
