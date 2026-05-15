@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDecideAdminBootstrap(t *testing.T) {
@@ -133,4 +134,27 @@ func TestApplyConnectionURLEnvOverrides(t *testing.T) {
 	if !cfg.Redis.EnableTLS {
 		t.Fatalf("redis enable_tls = false, want true")
 	}
+}
+
+func TestSetupMigrationTimeout(t *testing.T) {
+	t.Run("default timeout is ten minutes", func(t *testing.T) {
+		t.Setenv("SETUP_MIGRATION_TIMEOUT_SECONDS", "")
+		if got := setupMigrationTimeout(); got != 10*time.Minute {
+			t.Fatalf("setupMigrationTimeout()=%s, want %s", got, 10*time.Minute)
+		}
+	})
+
+	t.Run("valid override uses seconds from env", func(t *testing.T) {
+		t.Setenv("SETUP_MIGRATION_TIMEOUT_SECONDS", "900")
+		if got := setupMigrationTimeout(); got != 15*time.Minute {
+			t.Fatalf("setupMigrationTimeout()=%s, want %s", got, 15*time.Minute)
+		}
+	})
+
+	t.Run("invalid override falls back to default", func(t *testing.T) {
+		t.Setenv("SETUP_MIGRATION_TIMEOUT_SECONDS", "bad")
+		if got := setupMigrationTimeout(); got != 10*time.Minute {
+			t.Fatalf("setupMigrationTimeout()=%s, want %s", got, 10*time.Minute)
+		}
+	})
 }

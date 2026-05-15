@@ -28,6 +28,7 @@ const (
 	InstallLockFile            = ".installed"
 	defaultUserConcurrency     = 5
 	simpleModeAdminConcurrency = 30
+	defaultSetupMigrationTTL   = 10 * time.Minute
 )
 
 func setupDefaultAdminConcurrency() int {
@@ -345,9 +346,29 @@ func initializeDatabase(cfg *SetupConfig) error {
 		}
 	}()
 
-	migrationCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	migrationCtx, cancel := context.WithTimeout(context.Background(), setupMigrationTimeout())
 	defer cancel()
 	return repository.ApplyMigrations(migrationCtx, db)
+}
+
+func setupMigrationTimeout() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("SETUP_MIGRATION_TIMEOUT_SECONDS"))
+	if raw == "" {
+		return defaultSetupMigrationTTL
+	}
+
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds <= 0 {
+		logger.LegacyPrintf(
+			"setup",
+			"invalid SETUP_MIGRATION_TIMEOUT_SECONDS=%q, using default %s",
+			raw,
+			defaultSetupMigrationTTL,
+		)
+		return defaultSetupMigrationTTL
+	}
+
+	return time.Duration(seconds) * time.Second
 }
 
 func createAdminUser(cfg *SetupConfig) (bool, string, error) {
