@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/cpaimport"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
@@ -24,8 +25,9 @@ import (
 )
 
 type Application struct {
-	Server  *http.Server
-	Cleanup func()
+	Server             *http.Server
+	Cleanup            func()
+	CPAImportBootstrap *cpaimport.BootstrapService
 }
 
 func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
@@ -37,6 +39,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		repository.ProviderSet,
 		service.ProviderSet,
 		payment.ProviderSet,
+		cpaimport.ProviderSet,
 		middleware.ProviderSet,
 		handler.ProviderSet,
 
@@ -53,7 +56,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		provideCleanup,
 
 		// Application struct
-		wire.Struct(new(Application), "Server", "Cleanup"),
+		wire.Struct(new(Application), "Server", "Cleanup", "CPAImportBootstrap"),
 	)
 	return nil, nil
 }

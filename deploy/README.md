@@ -35,10 +35,10 @@ Use the automated preparation script for the easiest setup:
 
 ```bash
 # Download and run the preparation script
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh | bash
+curl -sSL https://raw.githubusercontent.com/sh2001sh/sub2api/main/deploy/docker-deploy.sh | bash
 
 # Or download first, then run
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh -o docker-deploy.sh
+curl -sSL https://raw.githubusercontent.com/sh2001sh/sub2api/main/deploy/docker-deploy.sh -o docker-deploy.sh
 chmod +x docker-deploy.sh
 ./docker-deploy.sh
 ```
@@ -71,7 +71,7 @@ If you prefer manual control:
 
 ```bash
 # Clone repository
-git clone https://github.com/Wei-Shaw/sub2api.git
+git clone https://github.com/sh2001sh/sub2api.git
 cd sub2api/deploy
 
 # Configure environment
@@ -123,6 +123,39 @@ When using Docker Compose with `AUTO_SETUP=true`:
    ```bash
    docker compose logs sub2api | grep "admin password"
    ```
+
+### MyCPA Compatibility Import
+
+If you want `sub2api` to bootstrap legacy `MyCPA` data at startup, enable the CPA importer in `.env`.
+
+Supported import source layouts:
+
+- `auths/*.json`
+- `config/config.yaml` with top-level `api-keys`
+
+Recommended for a single-image remote deployment such as DigitalOcean:
+
+```bash
+CPA_IMPORT_ENABLED=true
+GITSTORE_GIT_URL=https://github.com/your-org/your-cpa-store.git
+GITSTORE_GIT_USERNAME=your-git-username
+GITSTORE_GIT_TOKEN=your-git-token
+GITSTORE_GIT_BRANCH=main
+```
+
+If you already mount a local snapshot into the container, you can use:
+
+```bash
+CPA_IMPORT_ENABLED=true
+CPA_IMPORT_SOURCE_DIR=/app/legacy-cpa
+```
+
+Notes:
+
+- When both `GITSTORE_GIT_URL` and `CPA_IMPORT_SOURCE_DIR` are set, the Git source is used first.
+- Imported legacy accounts and imported legacy API keys are created as ungrouped objects, so one original CPA key can continue dispatching across multiple providers.
+- Original client keys are reused unchanged.
+- The runtime image now includes `git`, so GitStore bootstrap works inside the container.
 
 ### Database Migration Notes (PostgreSQL)
 
@@ -353,12 +386,12 @@ For production servers using systemd.
 ### One-Line Installation
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/sh2001sh/sub2api/main/deploy/install.sh | sudo bash
 ```
 
 ### Manual Installation
 
-1. Download the latest release from [GitHub Releases](https://github.com/Wei-Shaw/sub2api/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/sh2001sh/sub2api/releases)
 2. Extract and copy the binary to `/opt/sub2api/`
 3. Copy `sub2api.service` to `/etc/systemd/system/`
 4. Run:

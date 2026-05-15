@@ -150,6 +150,14 @@ func runMainServer() {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 	defer app.Cleanup()
+	bootstrapCtx, cancelBootstrap := context.WithTimeout(context.Background(), 5*time.Minute)
+	if app.CPAImportBootstrap != nil {
+		if _, err := app.CPAImportBootstrap.Run(bootstrapCtx); err != nil {
+			cancelBootstrap()
+			log.Fatalf("CPA import bootstrap failed: %v", err)
+		}
+	}
+	cancelBootstrap()
 
 	// 启动服务器
 	go func() {
