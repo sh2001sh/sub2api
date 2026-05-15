@@ -76,12 +76,16 @@ func main() {
 		return
 	}
 
+	var bootstrapHealthServer *http.Server
+
 	// Check if setup is needed
 	if setup.NeedsSetup() {
 		// Check if auto-setup is enabled (for Docker deployment)
 		if setup.AutoSetupEnabled() {
 			log.Println("Auto setup mode enabled...")
+			bootstrapHealthServer = startBootstrapHealthServer(config.GetServerAddress())
 			if err := setup.AutoSetupFromEnv(); err != nil {
+				shutdownBootstrapHealthServer(bootstrapHealthServer)
 				log.Fatalf("Auto setup failed: %v", err)
 			}
 			// Continue to main server after auto-setup
@@ -93,7 +97,7 @@ func main() {
 	}
 
 	// Normal server mode
-	runMainServer()
+	runMainServer(bootstrapHealthServer)
 }
 
 func runSetupServer() {
@@ -128,12 +132,14 @@ func runSetupServer() {
 	}
 }
 
-func runMainServer() {
+func runMainServer(bootstrapHealthServer *http.Server) {
 	cfg, err := config.LoadForBootstrap()
 	if err != nil {
+		shutdownBootstrapHealthServer(bootstrapHealthServer)
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	if err := logger.Init(logger.OptionsFromConfig(cfg.Log)); err != nil {
+		shutdownBootstrapHealthServer(bootstrapHealthServer)
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 	if cfg.RunMode == config.RunModeSimple {
@@ -147,6 +153,7 @@ func runMainServer() {
 
 	app, err := initializeApplication(buildInfo)
 	if err != nil {
+		shutdownBootstrapHealthServer(bootstrapHealthServer)
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 	defer app.Cleanup()
@@ -154,10 +161,12 @@ func runMainServer() {
 	if app.CPAImportBootstrap != nil {
 		if _, err := app.CPAImportBootstrap.Run(bootstrapCtx); err != nil {
 			cancelBootstrap()
+			shutdownBootstrapHealthServer(bootstrapHealthServer)
 			log.Fatalf("CPA import bootstrap failed: %v", err)
 		}
 	}
 	cancelBootstrap()
+	shutdownBootstrapHealthServer(bootstrapHealthServer)
 
 	// 启动服务器
 	go func() {
@@ -183,4 +192,44 @@ func runMainServer() {
 	}
 
 	log.Println("Server exited")
+}
+
+func startBootstrapHealthServer(addr string) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"bootstrapping"}`))
+	})
+	mux.HandleFunc("/setup/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":0,"data":{"needs_setup":true,"step":"auto_setup_running"}}`))
+	})
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Failed to start bootstrap health server: %v", err)
+		}
+	}()
+
+	log.Printf("Bootstrap health server listening on http://%s", addr)
+	return server
+}
+
+func shutdownBootstrapHealthServer(server *http.Server) {
+	if server == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Printf("Failed to stop bootstrap health server: %v", err)
+	}
 }
