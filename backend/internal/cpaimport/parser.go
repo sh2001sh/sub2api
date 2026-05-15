@@ -65,34 +65,62 @@ func parseLegacyAuth(data []byte, fileName string) (LegacyAuth, error) {
 		FileName:   fileName,
 		Raw:        raw,
 	}
-	if v, ok := raw["id"].(string); ok {
-		auth.ID = strings.TrimSpace(v)
-	}
-	if v, ok := raw["provider"].(string); ok {
-		auth.Provider = strings.TrimSpace(v)
-	}
-	if v, ok := raw["prefix"].(string); ok {
-		auth.Prefix = strings.TrimSpace(v)
-	}
-	if v, ok := raw["label"].(string); ok {
-		auth.Label = strings.TrimSpace(v)
-	}
-	if v, ok := raw["disabled"].(bool); ok {
-		auth.Disabled = v
-	}
-	if v, ok := raw["proxy_url"].(string); ok {
-		auth.ProxyURL = strings.TrimSpace(v)
-	}
-	if attrs, ok := raw["attributes"].(map[string]any); ok {
-		for key, value := range attrs {
-			if value == nil {
-				continue
-			}
-			auth.Attributes[key] = strings.TrimSpace(fmt.Sprint(value))
+	if usesWrappedLegacyAuth(raw) {
+		if v, ok := raw["id"].(string); ok {
+			auth.ID = strings.TrimSpace(v)
 		}
-	}
-	if metadata, ok := raw["metadata"].(map[string]any); ok {
-		auth.Metadata = metadata
+		if v, ok := raw["provider"].(string); ok {
+			auth.Provider = strings.TrimSpace(v)
+		}
+		if v, ok := raw["prefix"].(string); ok {
+			auth.Prefix = strings.TrimSpace(v)
+		}
+		if v, ok := raw["label"].(string); ok {
+			auth.Label = strings.TrimSpace(v)
+		}
+		auth.Disabled = readBoolFromAny(raw["disabled"])
+		if v, ok := raw["proxy_url"].(string); ok {
+			auth.ProxyURL = strings.TrimSpace(v)
+		}
+		if attrs, ok := raw["attributes"].(map[string]any); ok {
+			for key, value := range attrs {
+				if value == nil {
+					continue
+				}
+				auth.Attributes[key] = strings.TrimSpace(fmt.Sprint(value))
+			}
+		}
+		if metadata, ok := raw["metadata"].(map[string]any); ok {
+			auth.Metadata = cloneMap(metadata)
+		}
+	} else {
+		auth.Provider = firstNonEmptyValue(readString(raw, "type"), readString(raw, "provider"))
+		auth.Prefix = strings.TrimSpace(readString(raw, "prefix"))
+		auth.Label = inferNativeLegacyLabel(raw, auth.Provider)
+		auth.Disabled = readBoolFromAny(raw["disabled"])
+		auth.ProxyURL = strings.TrimSpace(readString(raw, "proxy_url"))
+		auth.Metadata = cloneMap(raw)
+		for _, key := range []string{
+			"api_key",
+			"base_url",
+			"user_agent",
+			"oauth_type",
+			"project_id",
+			"location",
+			"provider_key",
+			"compat_name",
+			"plan_type",
+			"chatgpt_account_id",
+			"chatgpt_user_id",
+			"organization_id",
+			"claude_user_id",
+			"anthropic_user_id",
+			"auth_mode",
+		} {
+			if value := readString(raw, key); value != "" {
+				auth.Attributes[key] = value
+			}
+		}
 	}
 	if auth.ID == "" {
 		auth.ID = strings.TrimSuffix(fileName, filepath.Ext(fileName))
@@ -166,6 +194,8 @@ func buildImportSpec(auth LegacyAuth) (*ImportAccountSpec, []string, error) {
 		"auth_mode",
 	)
 	copyMetadataStrings(credentials, auth.Metadata,
+		"api_key",
+		"base_url",
 		"access_token",
 		"refresh_token",
 		"id_token",
@@ -248,30 +278,30 @@ func buildImportSpec(auth LegacyAuth) (*ImportAccountSpec, []string, error) {
 func resolvePlatformAndType(provider string, auth LegacyAuth) (string, string, []string, error) {
 	switch provider {
 	case "claude", "anthropic":
-		if hasAttribute(auth, "api_key") {
+		if hasLegacyValue(auth, "api_key") {
 			return service.PlatformAnthropic, service.AccountTypeAPIKey, nil, nil
 		}
 		return service.PlatformAnthropic, service.AccountTypeOAuth, nil, nil
 	case "codex", "openai":
-		if hasAttribute(auth, "api_key") {
+		if hasLegacyValue(auth, "api_key") {
 			return service.PlatformOpenAI, service.AccountTypeAPIKey, nil, nil
 		}
 		return service.PlatformOpenAI, service.AccountTypeOAuth, nil, nil
 	case "gemini", "gemini-cli", "aistudio":
-		if hasAttribute(auth, "api_key") {
+		if hasLegacyValue(auth, "api_key") {
 			return service.PlatformGemini, service.AccountTypeAPIKey, nil, nil
 		}
 		return service.PlatformGemini, service.AccountTypeOAuth, nil, nil
 	case "vertex":
-		if hasAttribute(auth, "api_key") {
+		if hasLegacyValue(auth, "api_key") {
 			return service.PlatformGemini, service.AccountTypeAPIKey, nil, nil
 		}
-		if _, ok := auth.Metadata["service_account"].(map[string]any); ok {
+		if hasServiceAccountPayload(auth) {
 			return service.PlatformGemini, service.AccountTypeServiceAccount, nil, nil
 		}
 		return service.PlatformGemini, service.AccountTypeOAuth, []string{"vertex auth imported as oauth because no api_key/service_account payload was detected"}, nil
 	case "antigravity":
-		if hasAttribute(auth, "api_key") {
+		if hasLegacyValue(auth, "api_key") {
 			return service.PlatformAntigravity, service.AccountTypeAPIKey, nil, nil
 		}
 		return service.PlatformAntigravity, service.AccountTypeOAuth, nil, nil
@@ -309,6 +339,18 @@ func hasAttribute(auth LegacyAuth, key string) bool {
 	return strings.TrimSpace(auth.Attributes[key]) != ""
 }
 
+func hasLegacyValue(auth LegacyAuth, key string) bool {
+	if hasAttribute(auth, key) {
+		return true
+	}
+	return readString(auth.Metadata, key) != ""
+}
+
+func hasServiceAccountPayload(auth LegacyAuth) bool {
+	serviceAccount, ok := auth.Metadata["service_account"].(map[string]any)
+	return ok && len(serviceAccount) > 0
+}
+
 func buildAccountName(auth LegacyAuth, provider string) string {
 	if auth.Label != "" {
 		return auth.Label
@@ -331,6 +373,21 @@ func sanitizeNameToken(raw string) string {
 	return token
 }
 
+func usesWrappedLegacyAuth(raw map[string]any) bool {
+	if raw == nil {
+		return false
+	}
+	if _, ok := raw["metadata"].(map[string]any); ok {
+		return true
+	}
+	if _, ok := raw["attributes"].(map[string]any); ok {
+		return true
+	}
+	_, hasProvider := raw["provider"]
+	_, hasType := raw["type"]
+	return hasProvider && !hasType
+}
+
 func copyAttributeStrings(dst map[string]any, src map[string]string, keys ...string) {
 	for _, key := range keys {
 		if value := strings.TrimSpace(src[key]); value != "" {
@@ -347,6 +404,17 @@ func copyMetadataStrings(dst map[string]any, src map[string]any, keys ...string)
 	}
 }
 
+func cloneMap(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return map[string]any{}
+	}
+	dst := make(map[string]any, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
 func readString(src map[string]any, key string) string {
 	if src == nil {
 		return ""
@@ -359,6 +427,52 @@ func readStringFromAny(value any) string {
 		return ""
 	}
 	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func readBoolFromAny(value any) bool {
+	if value == nil {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "1", "true", "yes", "on":
+			return true
+		default:
+			return false
+		}
+	case json.Number:
+		if parsed, err := typed.Int64(); err == nil {
+			return parsed != 0
+		}
+	case float64:
+		return typed != 0
+	case int:
+		return typed != 0
+	case int64:
+		return typed != 0
+	}
+	return false
+}
+
+func inferNativeLegacyLabel(raw map[string]any, provider string) string {
+	return firstNonEmptyValue(
+		readString(raw, "label"),
+		readString(raw, "email"),
+		readString(raw, "project_id"),
+		strings.TrimSpace(provider),
+	)
+}
+
+func firstNonEmptyValue(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func normalizeLegacyExpiry(metadata map[string]any) string {

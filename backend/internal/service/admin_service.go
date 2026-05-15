@@ -525,6 +525,7 @@ type adminServiceImpl struct {
 	proxyProber          ProxyExitInfoProber
 	proxyLatencyCache    ProxyLatencyCache
 	authCacheInvalidator APIKeyAuthCacheInvalidator
+	cpaStoreSyncer       CPAStoreSyncer
 	entClient            *dbent.Client // 用于开启数据库事务
 	settingService       *SettingService
 	defaultSubAssigner   DefaultSubscriptionAssigner
@@ -575,6 +576,10 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 	}
+}
+
+func (s *adminServiceImpl) SetCPAStoreSyncer(syncer CPAStoreSyncer) {
+	s.cpaStoreSyncer = syncer
 }
 
 // User management implementations
@@ -2450,6 +2455,12 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		}
 	}
 
+	if s.cpaStoreSyncer != nil {
+		if err := s.cpaStoreSyncer.SyncAccountUpsert(ctx, account); err != nil {
+			return account, fmt.Errorf("sync CPA account store after create: %w", err)
+		}
+	}
+
 	return account, nil
 }
 
@@ -2575,6 +2586,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	updated, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if s.cpaStoreSyncer != nil {
+		if err := s.cpaStoreSyncer.SyncAccountUpsert(ctx, updated); err != nil {
+			return updated, fmt.Errorf("sync CPA account store after update: %w", err)
+		}
 	}
 	return updated, nil
 }
@@ -2755,8 +2771,21 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 }
 
 func (s *adminServiceImpl) DeleteAccount(ctx context.Context, id int64) error {
+	var existing *Account
+	if s.cpaStoreSyncer != nil {
+		account, err := s.accountRepo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		existing = account
+	}
 	if err := s.accountRepo.Delete(ctx, id); err != nil {
 		return err
+	}
+	if s.cpaStoreSyncer != nil {
+		if err := s.cpaStoreSyncer.SyncAccountDelete(ctx, existing); err != nil {
+			return fmt.Errorf("sync CPA account store after delete: %w", err)
+		}
 	}
 	return nil
 }

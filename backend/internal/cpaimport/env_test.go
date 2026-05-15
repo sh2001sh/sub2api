@@ -1,5 +1,7 @@
 package cpaimport
 
+import "os"
+
 import "testing"
 
 func TestLoadConfigFromEnv_DisabledByDefault(t *testing.T) {
@@ -13,6 +15,34 @@ func TestLoadConfigFromEnv_DisabledByDefault(t *testing.T) {
 	}
 	if cfg.Enabled {
 		t.Fatalf("expected import to be disabled by default")
+	}
+}
+
+func TestLoadConfigFromEnv_AutoEnablesWhenGitStoreProvided(t *testing.T) {
+	_ = os.Unsetenv("CPA_IMPORT_ENABLED")
+	t.Setenv("GITSTORE_GIT_URL", "https://example.com/repo.git")
+	t.Setenv("GITSTORE_GIT_USERNAME", "tester")
+	t.Setenv("GITSTORE_GIT_TOKEN", "secret")
+
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigFromEnv returned error: %v", err)
+	}
+	if !cfg.Enabled {
+		t.Fatalf("expected import to auto-enable when GITSTORE_GIT_URL is set")
+	}
+}
+
+func TestLoadConfigFromEnv_ExplicitFalseDisablesAutoEnable(t *testing.T) {
+	t.Setenv("CPA_IMPORT_ENABLED", "false")
+	t.Setenv("GITSTORE_GIT_URL", "https://example.com/repo.git")
+
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigFromEnv returned error: %v", err)
+	}
+	if cfg.Enabled {
+		t.Fatalf("expected explicit false to disable import")
 	}
 }
 

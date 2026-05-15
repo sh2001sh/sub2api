@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1275,6 +1276,9 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
 	}
+	if err := applyConnectionURLEnvOverrides(&cfg); err != nil {
+		return nil, err
+	}
 
 	cfg.RunMode = NormalizeRunMode(cfg.RunMode)
 	cfg.Server.Mode = strings.ToLower(strings.TrimSpace(cfg.Server.Mode))
@@ -1396,6 +1400,94 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func applyConnectionURLEnvOverrides(cfg *Config) error {
+	if cfg == nil {
+		return nil
+	}
+
+	if raw, ok := os.LookupEnv("DATABASE_URL"); ok && strings.TrimSpace(raw) != "" {
+		parsed, err := ParseDatabaseURL(raw)
+		if err != nil {
+			return fmt.Errorf("parse DATABASE_URL: %w", err)
+		}
+		cfg.Database.Host = parsed.Host
+		cfg.Database.Port = parsed.Port
+		cfg.Database.User = parsed.User
+		cfg.Database.Password = parsed.Password
+		cfg.Database.DBName = parsed.DBName
+		cfg.Database.SSLMode = parsed.SSLMode
+	}
+	applyExplicitDatabaseFieldEnvOverrides(&cfg.Database)
+
+	if raw, ok := os.LookupEnv("REDIS_URL"); ok && strings.TrimSpace(raw) != "" {
+		parsed, err := ParseRedisURL(raw)
+		if err != nil {
+			return fmt.Errorf("parse REDIS_URL: %w", err)
+		}
+		cfg.Redis.Host = parsed.Host
+		cfg.Redis.Port = parsed.Port
+		cfg.Redis.Password = parsed.Password
+		cfg.Redis.DB = parsed.DB
+		cfg.Redis.EnableTLS = parsed.EnableTLS
+	}
+	applyExplicitRedisFieldEnvOverrides(&cfg.Redis)
+
+	return nil
+}
+
+func applyExplicitDatabaseFieldEnvOverrides(cfg *DatabaseConfig) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := os.LookupEnv("DATABASE_HOST"); ok {
+		cfg.Host = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DATABASE_PORT"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.Port = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("DATABASE_USER"); ok {
+		cfg.User = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DATABASE_PASSWORD"); ok {
+		cfg.Password = value
+	}
+	if value, ok := os.LookupEnv("DATABASE_DBNAME"); ok {
+		cfg.DBName = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DATABASE_SSLMODE"); ok {
+		cfg.SSLMode = strings.TrimSpace(value)
+	}
+}
+
+func applyExplicitRedisFieldEnvOverrides(cfg *RedisConfig) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := os.LookupEnv("REDIS_HOST"); ok {
+		cfg.Host = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("REDIS_PORT"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.Port = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("REDIS_PASSWORD"); ok {
+		cfg.Password = value
+	}
+	if value, ok := os.LookupEnv("REDIS_DB"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			cfg.DB = parsed
+		}
+	}
+	if value, ok := os.LookupEnv("REDIS_ENABLE_TLS"); ok && strings.TrimSpace(value) != "" {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(value)); err == nil {
+			cfg.EnableTLS = parsed
+		}
+	}
 }
 
 func setDefaults() {

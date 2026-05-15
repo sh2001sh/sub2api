@@ -367,6 +367,49 @@ func TestLoadDefaultDatabaseSSLMode(t *testing.T) {
 	}
 }
 
+func TestLoadDatabaseConfigFromDatabaseURL(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DATABASE_URL", "postgresql://dbuser:dbpass@db.example.com:6543/appdb?sslmode=require")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "db.example.com", cfg.Database.Host)
+	require.Equal(t, 6543, cfg.Database.Port)
+	require.Equal(t, "dbuser", cfg.Database.User)
+	require.Equal(t, "dbpass", cfg.Database.Password)
+	require.Equal(t, "appdb", cfg.Database.DBName)
+	require.Equal(t, "require", cfg.Database.SSLMode)
+}
+
+func TestLoadDatabaseConfigExplicitEnvOverridesDatabaseURL(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DATABASE_URL", "postgresql://dbuser:dbpass@db.example.com:6543/appdb?sslmode=require")
+	t.Setenv("DATABASE_HOST", "override.example.com")
+	t.Setenv("DATABASE_PORT", "7432")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "override.example.com", cfg.Database.Host)
+	require.Equal(t, 7432, cfg.Database.Port)
+	require.Equal(t, "dbuser", cfg.Database.User)
+	require.Equal(t, "dbpass", cfg.Database.Password)
+	require.Equal(t, "appdb", cfg.Database.DBName)
+	require.Equal(t, "require", cfg.Database.SSLMode)
+}
+
+func TestLoadRedisConfigFromRedisURL(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("REDIS_URL", "rediss://:redispass@redis.example.com:6380/2")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "redis.example.com", cfg.Redis.Host)
+	require.Equal(t, 6380, cfg.Redis.Port)
+	require.Equal(t, "redispass", cfg.Redis.Password)
+	require.Equal(t, 2, cfg.Redis.DB)
+	require.True(t, cfg.Redis.EnableTLS)
+}
+
 func TestValidateLinuxDoFrontendRedirectURL(t *testing.T) {
 	resetViperWithJWTSecret(t)
 
