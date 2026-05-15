@@ -52,6 +52,13 @@ func TestValidateProviderRequest(t *testing.T) {
 			wantErr:        false,
 		},
 		{
+			name:           "valid xunhupay provider",
+			providerKey:    payment.TypeXunhuPay,
+			providerName:   "XunhuPay Provider",
+			supportedTypes: payment.TypeWxpay,
+			wantErr:        false,
+		},
+		{
 			name:           "valid alipay provider",
 			providerKey:    "alipay",
 			providerName:   "Alipay Direct",
@@ -149,6 +156,12 @@ func TestIsSensitiveProviderConfigField(t *testing.T) {
 		{"easypay", "pkey", true},
 		{"easypay", "pid", false},
 		{"easypay", "apiBase", false},
+
+		// XunhuPay
+		{payment.TypeXunhuPay, "appSecret", true},
+		{payment.TypeXunhuPay, "appId", false},
+		{payment.TypeXunhuPay, "apiBase", false},
+		{payment.TypeXunhuPay, "notifyUrl", false},
 
 		// Airwallex
 		{payment.TypeAirwallex, "apiKey", true},
@@ -447,6 +460,24 @@ func TestUpdateProviderInstanceRejectsProtectedConfigChangesWhilePendingOrders(t
 			fieldName:     "webhookSecret",
 			wantValue:     "whsec-test",
 		},
+		{
+			name:          "xunhupay appId",
+			providerKey:   payment.TypeXunhuPay,
+			createConfig:  validXunhuPayProviderConfig,
+			supportedType: []string{payment.TypeWxpay},
+			updateConfig:  map[string]string{"appId": "xh-app-updated"},
+			fieldName:     "appId",
+			wantValue:     "xh-app-test",
+		},
+		{
+			name:          "xunhupay appSecret",
+			providerKey:   payment.TypeXunhuPay,
+			createConfig:  validXunhuPayProviderConfig,
+			supportedType: []string{payment.TypeWxpay},
+			updateConfig:  map[string]string{"appSecret": "xh-secret-updated"},
+			fieldName:     "appSecret",
+			wantValue:     "xh-secret-test",
+		},
 	}
 
 	for _, tc := range tests {
@@ -517,6 +548,15 @@ func TestUpdateProviderInstanceAllowsSafeConfigChangesWhilePendingOrders(t *test
 			updateConfig:  map[string]string{"appId": "alipay-app-test"},
 			fieldName:     "appId",
 			wantValue:     "alipay-app-test",
+		},
+		{
+			name:          "xunhupay notifyUrl",
+			providerKey:   payment.TypeXunhuPay,
+			createConfig:  validXunhuPayProviderConfig,
+			supportedType: []string{payment.TypeWxpay},
+			updateConfig:  map[string]string{"notifyUrl": "https://merchant.example.com/xunhupay/notify-v2"},
+			fieldName:     "notifyUrl",
+			wantValue:     "https://merchant.example.com/xunhupay/notify-v2",
 		},
 	}
 
@@ -628,6 +668,8 @@ func providerPendingOrderPaymentType(providerKey string) string {
 	switch providerKey {
 	case payment.TypeWxpay:
 		return payment.TypeWxpay
+	case payment.TypeXunhuPay:
+		return payment.TypeWxpay
 	case payment.TypeAlipay:
 		return payment.TypeAlipay
 	case payment.TypeAirwallex:
@@ -687,6 +729,18 @@ func validAirwallexProviderConfig(t *testing.T) map[string]string {
 		"apiBase":       "https://api-demo.airwallex.com/api/v1",
 		"accountId":     "acct-test",
 		"currency":      "CNY",
+	}
+}
+
+func validXunhuPayProviderConfig(t *testing.T) map[string]string {
+	t.Helper()
+
+	return map[string]string{
+		"appId":     "xh-app-test",
+		"appSecret": "xh-secret-test",
+		"apiBase":   "https://api.xunhupay.com",
+		"notifyUrl": "https://merchant.example.com/xunhupay/notify",
+		"returnUrl": "https://merchant.example.com/payment/result",
 	}
 }
 

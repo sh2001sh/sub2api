@@ -69,6 +69,13 @@ func TestWriteSuccessResponse(t *testing.T) {
 			wantBody:        "success",
 		},
 		{
+			name:            "xunhupay returns plain text success",
+			providerKey:     payment.TypeXunhuPay,
+			wantCode:        http.StatusOK,
+			wantContentType: "text/plain",
+			wantBody:        "success",
+		},
+		{
 			name:            "unknown provider returns plain text success",
 			providerKey:     "unknown_provider",
 			wantCode:        http.StatusOK,
@@ -171,6 +178,12 @@ func TestExtractOutTradeNo(t *testing.T) {
 			providerKey: "wxpay",
 			rawBody:     "{}",
 			want:        "",
+		},
+		{
+			name:        "xunhupay notify payload",
+			providerKey: payment.TypeXunhuPay,
+			rawBody:     "trade_order_id=sub2_xh_789&status=OD",
+			want:        "sub2_xh_789",
 		},
 		{
 			name:        "airwallex payment intent payload",

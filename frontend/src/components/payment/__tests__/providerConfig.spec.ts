@@ -41,6 +41,16 @@ describe('PROVIDER_CONFIG_FIELDS.airwallex', () => {
   })
 })
 
+describe('PROVIDER_CONFIG_FIELDS.xunhupay', () => {
+  it('uses the official API base as the default', () => {
+    expect(findField('xunhupay', 'apiBase')?.defaultValue).toBe('https://api.xunhupay.com')
+  })
+
+  it('stores the app secret as a sensitive field', () => {
+    expect(findField('xunhupay', 'appSecret')?.sensitive).toBe(true)
+  })
+})
+
 describe('PROVIDER_CONFIG_FIELDS.stripe', () => {
   it('adds currency config with CNY as the default', () => {
     const currency = findField('stripe', 'currency')

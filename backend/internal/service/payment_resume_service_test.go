@@ -439,6 +439,7 @@ func TestNormalizeVisibleMethodSource(t *testing.T) {
 		{name: "alipay easypay alias", method: payment.TypeAlipay, input: "easypay", want: VisibleMethodSourceEasyPayAlipay},
 		{name: "wxpay official alias", method: payment.TypeWxpay, input: "wxpay", want: VisibleMethodSourceOfficialWechat},
 		{name: "wxpay easypay alias", method: payment.TypeWxpay, input: "easypay", want: VisibleMethodSourceEasyPayWechat},
+		{name: "wxpay xunhupay alias", method: payment.TypeWxpay, input: "xunhupay", want: VisibleMethodSourceXunhuPayWechat},
 		{name: "unsupported source", method: payment.TypeWxpay, input: "stripe", want: ""},
 	}
 
@@ -466,6 +467,7 @@ func TestVisibleMethodProviderKeyForSource(t *testing.T) {
 		{name: "easypay alipay", method: payment.TypeAlipay, source: VisibleMethodSourceEasyPayAlipay, want: payment.TypeEasyPay, ok: true},
 		{name: "official wechat", method: payment.TypeWxpay, source: VisibleMethodSourceOfficialWechat, want: payment.TypeWxpay, ok: true},
 		{name: "easypay wechat", method: payment.TypeWxpay, source: VisibleMethodSourceEasyPayWechat, want: payment.TypeEasyPay, ok: true},
+		{name: "xunhupay wechat", method: payment.TypeWxpay, source: VisibleMethodSourceXunhuPayWechat, want: payment.TypeXunhuPay, ok: true},
 		{name: "mismatched method and source", method: payment.TypeAlipay, source: VisibleMethodSourceOfficialWechat, want: "", ok: false},
 	}
 
@@ -565,6 +567,16 @@ func TestVisibleMethodLoadBalancerUsesConfiguredSourceWhenMultipleProvidersEnabl
 			sourceSetting: VisibleMethodSourceEasyPayWechat,
 			wantProvider:  payment.TypeEasyPay,
 		},
+		{
+			name:          "wxpay uses xunhupay source",
+			method:        payment.TypeWxpay,
+			officialName:  "Official WeChat",
+			officialTypes: "wxpay",
+			easyPayName:   "XunhuPay WeChat",
+			easyPayTypes:  "wxpay",
+			sourceSetting: VisibleMethodSourceXunhuPayWechat,
+			wantProvider:  payment.TypeXunhuPay,
+		},
 	}
 
 	for _, tt := range tests {
@@ -591,8 +603,13 @@ func TestVisibleMethodLoadBalancerUsesConfiguredSourceWhenMultipleProvidersEnabl
 				t.Fatalf("create official provider: %v", err)
 			}
 
+			secondaryProviderKey := payment.TypeEasyPay
+			if tt.wantProvider == payment.TypeXunhuPay {
+				secondaryProviderKey = payment.TypeXunhuPay
+			}
+
 			_, err = client.PaymentProviderInstance.Create().
-				SetProviderKey(payment.TypeEasyPay).
+				SetProviderKey(secondaryProviderKey).
 				SetName(tt.easyPayName).
 				SetConfig("{}").
 				SetSupportedTypes(tt.easyPayTypes).

@@ -5519,6 +5519,7 @@ export default {
         providerAlipay: 'Alipay (Direct)',
         providerWxpay: 'WeChat Pay (Direct)',
         providerStripe: 'Stripe',
+        providerXunhuPay: 'XunhuPay',
         providerAirwallex: 'Airwallex',
         typeDisabled: 'type disabled',
         enableTypesFirst: 'Enable at least one payment type above first',
@@ -6417,6 +6418,7 @@ export default {
     createOrder: 'Confirm Payment',
     methods: {
       easypay: 'EasyPay',
+      xunhupay: 'XunhuPay',
       alipay: 'Alipay',
       wxpay: 'WeChat Pay',
       stripe: 'Stripe',
