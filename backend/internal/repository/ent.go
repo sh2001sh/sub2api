@@ -95,5 +95,12 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 		}
 	}
 
+	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer seedCancel()
+	if err := ensureCPAPricingCatalog(seedCtx, client); err != nil {
+		_ = client.Close()
+		return nil, nil, err
+	}
+
 	return client, drv.DB(), nil
 }
