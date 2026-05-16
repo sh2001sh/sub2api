@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -70,6 +72,141 @@ func GetConfigFilePath() string {
 // GetInstallLockPath returns the full path to .installed lock file
 func GetInstallLockPath() string {
 	return GetDataDir() + "/" + InstallLockFile
+}
+
+type embeddedRedisEnv struct {
+	Enabled         bool
+	Host            string
+	Port            int
+	Password        string
+	DB              int
+	EnableTLS       bool
+	MaxMemory       string
+	MaxMemoryPolicy string
+	AppendOnly      string
+	Save            string
+	Databases       int
+}
+
+func shouldEnableEmbeddedRedisFromEnv() bool {
+	if raw := strings.TrimSpace(os.Getenv("REDIS_URL")); raw != "" {
+		return false
+	}
+	if raw, ok := os.LookupEnv("LOCAL_REDIS_ENABLED"); ok && !parseEnvBool(raw) {
+		return false
+	}
+
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("REDIS_HOST"))) {
+	case "", "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func parseEnvBool(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func loadEmbeddedRedisEnv() embeddedRedisEnv {
+	return embeddedRedisEnv{
+		Enabled:         shouldEnableEmbeddedRedisFromEnv(),
+		Host:            "127.0.0.1",
+		Port:            getEnvIntOrDefault("REDIS_PORT", 6379),
+		Password:        os.Getenv("REDIS_PASSWORD"),
+		DB:              getEnvIntOrDefault("REDIS_DB", 0),
+		EnableTLS:       false,
+		MaxMemory:       getEnvOrDefault("LOCAL_REDIS_MAXMEMORY", "128mb"),
+		MaxMemoryPolicy: getEnvOrDefault("LOCAL_REDIS_MAXMEMORY_POLICY", "allkeys-lru"),
+		AppendOnly:      getEnvOrDefault("LOCAL_REDIS_APPENDONLY", "no"),
+		Save:            getEnvOrDefault("LOCAL_REDIS_SAVE", `""`),
+		Databases:       getEnvIntOrDefault("LOCAL_REDIS_DATABASES", 16),
+	}
+}
+
+// EnsureEmbeddedRedisFromEnv starts an in-container Redis instance when no
+// external Redis is configured and the deployment is using single-container mode.
+func EnsureEmbeddedRedisFromEnv() error {
+	cfg := loadEmbeddedRedisEnv()
+	if !cfg.Enabled {
+		return nil
+	}
+
+	os.Setenv("REDIS_HOST", cfg.Host)
+	os.Setenv("REDIS_PORT", strconv.Itoa(cfg.Port))
+	os.Setenv("REDIS_ENABLE_TLS", "false")
+
+	if err := pingEmbeddedRedis(cfg, 750*time.Millisecond); err == nil {
+		return nil
+	}
+
+	if _, err := exec.LookPath("redis-server"); err != nil {
+		return fmt.Errorf("embedded redis requested but redis-server not found in PATH: %w", err)
+	}
+
+	redisDir := filepath.Join(GetDataDir(), "redis")
+	if err := os.MkdirAll(redisDir, 0755); err != nil {
+		return fmt.Errorf("create embedded redis dir: %w", err)
+	}
+
+	confPath := filepath.Join(redisDir, "redis.conf")
+	conf := fmt.Sprintf(
+		"bind 127.0.0.1\nprotected-mode yes\nport %d\ndir %s\npidfile %s\ndaemonize yes\ndatabases %d\nappendonly %s\nsave %s\nmaxmemory %s\nmaxmemory-policy %s\ntcp-keepalive 60\ntimeout 0\n",
+		cfg.Port,
+		redisDir,
+		filepath.Join(redisDir, "redis.pid"),
+		cfg.Databases,
+		cfg.AppendOnly,
+		cfg.Save,
+		cfg.MaxMemory,
+		cfg.MaxMemoryPolicy,
+	)
+	if cfg.Password != "" {
+		conf += fmt.Sprintf("requirepass %s\n", cfg.Password)
+	}
+	if err := os.WriteFile(confPath, []byte(conf), 0644); err != nil {
+		return fmt.Errorf("write embedded redis config: %w", err)
+	}
+
+	cmd := exec.Command("redis-server", confPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("start embedded redis: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+
+	for attempt := 0; attempt < 30; attempt++ {
+		if err := pingEmbeddedRedis(cfg, time.Second); err == nil {
+			logger.LegacyPrintf("setup", "Embedded Redis started on %s:%d (db=%d, maxmemory=%s)", cfg.Host, cfg.Port, cfg.DB, cfg.MaxMemory)
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+
+	return fmt.Errorf("embedded redis failed readiness check on %s:%d", cfg.Host, cfg.Port)
+}
+
+func pingEmbeddedRedis(cfg embeddedRedisEnv, timeout time.Duration) error {
+	opts := &redis.Options{
+		Addr:         fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Password:     cfg.Password,
+		DB:           cfg.DB,
+		DialTimeout:  timeout,
+		ReadTimeout:  timeout,
+		WriteTimeout: timeout,
+	}
+	client := redis.NewClient(opts)
+	defer func() {
+		_ = client.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return client.Ping(ctx).Err()
 }
 
 // SetupConfig holds the setup configuration

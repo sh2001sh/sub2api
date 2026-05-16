@@ -158,3 +158,56 @@ func TestSetupMigrationTimeout(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldEnableEmbeddedRedisFromEnv(t *testing.T) {
+	t.Run("enabled when no redis url and local host", func(t *testing.T) {
+		t.Setenv("REDIS_URL", "")
+		t.Setenv("REDIS_HOST", "127.0.0.1")
+		t.Setenv("LOCAL_REDIS_ENABLED", "true")
+		if !shouldEnableEmbeddedRedisFromEnv() {
+			t.Fatal("shouldEnableEmbeddedRedisFromEnv() = false, want true")
+		}
+	})
+
+	t.Run("disabled when redis url is set", func(t *testing.T) {
+		t.Setenv("REDIS_URL", "redis://remote:6379/0")
+		t.Setenv("REDIS_HOST", "127.0.0.1")
+		if shouldEnableEmbeddedRedisFromEnv() {
+			t.Fatal("shouldEnableEmbeddedRedisFromEnv() = true, want false")
+		}
+	})
+
+	t.Run("disabled when local redis explicitly off", func(t *testing.T) {
+		t.Setenv("REDIS_URL", "")
+		t.Setenv("REDIS_HOST", "127.0.0.1")
+		t.Setenv("LOCAL_REDIS_ENABLED", "false")
+		if shouldEnableEmbeddedRedisFromEnv() {
+			t.Fatal("shouldEnableEmbeddedRedisFromEnv() = true, want false")
+		}
+	})
+}
+
+func TestLoadEmbeddedRedisEnvForcesLocalLoopback(t *testing.T) {
+	t.Setenv("REDIS_URL", "")
+	t.Setenv("REDIS_HOST", "::1")
+	t.Setenv("REDIS_PORT", "6381")
+	t.Setenv("REDIS_DB", "2")
+	t.Setenv("LOCAL_REDIS_MAXMEMORY", "256mb")
+
+	cfg := loadEmbeddedRedisEnv()
+	if !cfg.Enabled {
+		t.Fatal("loadEmbeddedRedisEnv().Enabled = false, want true")
+	}
+	if cfg.Host != "127.0.0.1" {
+		t.Fatalf("embedded redis host = %q, want %q", cfg.Host, "127.0.0.1")
+	}
+	if cfg.Port != 6381 {
+		t.Fatalf("embedded redis port = %d, want 6381", cfg.Port)
+	}
+	if cfg.DB != 2 {
+		t.Fatalf("embedded redis db = %d, want 2", cfg.DB)
+	}
+	if cfg.MaxMemory != "256mb" {
+		t.Fatalf("embedded redis maxmemory = %q, want %q", cfg.MaxMemory, "256mb")
+	}
+}

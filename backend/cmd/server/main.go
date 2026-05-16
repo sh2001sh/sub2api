@@ -68,6 +68,10 @@ func main() {
 		return
 	}
 
+	if err := setup.EnsureEmbeddedRedisFromEnv(); err != nil {
+		log.Fatalf("Embedded Redis bootstrap failed: %v", err)
+	}
+
 	// CLI setup mode
 	if *setupMode {
 		if err := setup.RunCLI(); err != nil {
