@@ -137,9 +137,15 @@ func EnsureEmbeddedRedisFromEnv() error {
 		return nil
 	}
 
-	os.Setenv("REDIS_HOST", cfg.Host)
-	os.Setenv("REDIS_PORT", strconv.Itoa(cfg.Port))
-	os.Setenv("REDIS_ENABLE_TLS", "false")
+	if err := os.Setenv("REDIS_HOST", cfg.Host); err != nil {
+		return fmt.Errorf("set REDIS_HOST: %w", err)
+	}
+	if err := os.Setenv("REDIS_PORT", strconv.Itoa(cfg.Port)); err != nil {
+		return fmt.Errorf("set REDIS_PORT: %w", err)
+	}
+	if err := os.Setenv("REDIS_ENABLE_TLS", "false"); err != nil {
+		return fmt.Errorf("set REDIS_ENABLE_TLS: %w", err)
+	}
 
 	if err := pingEmbeddedRedis(cfg, 750*time.Millisecond); err == nil {
 		return nil
