@@ -22,9 +22,11 @@ func persistAccountCredentials(ctx context.Context, repo AccountRepository, acco
 		return err
 	}
 
-	if syncer := GlobalCPAStoreSyncer(); syncer != nil {
-		if err := syncer.SyncAccountUpsert(ctx, account); err != nil {
-			return err
+	if !CPAStoreSyncSuppressed(ctx) {
+		if syncer := GlobalCPAStoreSyncer(); syncer != nil {
+			if err := syncer.SyncAccountUpsert(ctx, account); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

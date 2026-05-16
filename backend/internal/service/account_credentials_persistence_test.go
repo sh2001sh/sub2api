@@ -78,3 +78,24 @@ func TestPersistAccountCredentials_PropagatesCPAStoreError(t *testing.T) {
 	require.Equal(t, 1, repo.updateCredentialsCalls)
 	require.Equal(t, 1, syncer.upsertCalls)
 }
+
+func TestPersistAccountCredentials_SkipsCPAStoreSyncWhenSuppressed(t *testing.T) {
+	t.Cleanup(func() { SetGlobalCPAStoreSyncer(nil) })
+
+	repo := &tokenRefreshAccountRepo{}
+	account := &Account{
+		ID:       3,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+	}
+	syncer := &cpaStoreSyncerStub{}
+	SetGlobalCPAStoreSyncer(syncer)
+
+	ctx := WithCPAStoreSyncSuppressed(context.Background())
+	err := persistAccountCredentials(ctx, repo, account, map[string]any{
+		"access_token": "suppressed-token",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, repo.updateCredentialsCalls)
+	require.Zero(t, syncer.upsertCalls)
+}

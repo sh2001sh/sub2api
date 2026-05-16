@@ -428,7 +428,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
 	s.compileAPIKeyIPRules(apiKey)
-	if s.cpaStoreSyncer != nil {
+	if s.cpaStoreSyncer != nil && !CPAStoreSyncSuppressed(ctx) {
 		if err := s.cpaStoreSyncer.SyncAPIKeyUpsert(ctx, apiKey, user); err != nil {
 			return apiKey, fmt.Errorf("sync legacy CPA api key after create: %w", err)
 		}
@@ -642,7 +642,7 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	if resetRateLimit && s.rateLimitCacheInvalid != nil {
 		_ = s.rateLimitCacheInvalid.InvalidateAPIKeyRateLimit(ctx, apiKey.ID)
 	}
-	if s.cpaStoreSyncer != nil {
+	if s.cpaStoreSyncer != nil && !CPAStoreSyncSuppressed(ctx) {
 		owner, err := s.userRepo.GetByID(ctx, apiKey.UserID)
 		if err != nil {
 			return apiKey, fmt.Errorf("load api key owner for CPA sync: %w", err)
@@ -685,7 +685,7 @@ func (s *APIKeyService) Delete(ctx context.Context, id int64, userID int64) erro
 		return fmt.Errorf("delete api key: %w", err)
 	}
 	s.lastUsedTouchL1.Delete(id)
-	if s.cpaStoreSyncer != nil {
+	if s.cpaStoreSyncer != nil && !CPAStoreSyncSuppressed(ctx) {
 		if err := s.cpaStoreSyncer.SyncAPIKeyDelete(ctx, &APIKey{ID: id, UserID: ownerID, Key: key}, owner); err != nil {
 			return fmt.Errorf("sync legacy CPA api key after delete: %w", err)
 		}

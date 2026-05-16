@@ -37,6 +37,8 @@ func NewBootstrapService(
 
 // Run executes the startup CPA compatibility import if enabled.
 func (s *BootstrapService) Run(ctx context.Context) (*BootstrapResult, error) {
+	ctx = service.WithCPAStoreSyncSuppressed(ctx)
+
 	cfg, err := LoadConfigFromEnv()
 	if err != nil {
 		return nil, err

@@ -95,6 +95,7 @@ LABEL org.opencontainers.image.source="https://github.com/sh2001sh/sub2api"
 RUN apk add --no-cache \
     ca-certificates \
     git \
+    redis \
     tzdata \
     su-exec \
     libpq \

@@ -2455,7 +2455,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		}
 	}
 
-	if s.cpaStoreSyncer != nil {
+	if s.cpaStoreSyncer != nil && !CPAStoreSyncSuppressed(ctx) {
 		if err := s.cpaStoreSyncer.SyncAccountUpsert(ctx, account); err != nil {
 			return account, fmt.Errorf("sync CPA account store after create: %w", err)
 		}
@@ -2587,7 +2587,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
-	if s.cpaStoreSyncer != nil {
+	if s.cpaStoreSyncer != nil && !CPAStoreSyncSuppressed(ctx) {
 		if err := s.cpaStoreSyncer.SyncAccountUpsert(ctx, updated); err != nil {
 			return updated, fmt.Errorf("sync CPA account store after update: %w", err)
 		}
@@ -2782,7 +2782,7 @@ func (s *adminServiceImpl) DeleteAccount(ctx context.Context, id int64) error {
 	if err := s.accountRepo.Delete(ctx, id); err != nil {
 		return err
 	}
-	if s.cpaStoreSyncer != nil {
+	if s.cpaStoreSyncer != nil && !CPAStoreSyncSuppressed(ctx) {
 		if err := s.cpaStoreSyncer.SyncAccountDelete(ctx, existing); err != nil {
 			return fmt.Errorf("sync CPA account store after delete: %w", err)
 		}
