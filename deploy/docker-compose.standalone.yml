@@ -54,15 +54,19 @@ services:
       - DATABASE_CONN_MAX_IDLE_TIME_MINUTES=${DATABASE_CONN_MAX_IDLE_TIME_MINUTES:-5}
 
       # =======================================================================
-      # Redis Configuration - Required
+      # Redis Configuration
       # =======================================================================
-      - REDIS_HOST=${REDIS_HOST:?REDIS_HOST is required}
+      - REDIS_HOST=${REDIS_HOST:-127.0.0.1}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - REDIS_DB=${REDIS_DB:-0}
       - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-64}
       - REDIS_MIN_IDLE_CONNS=${REDIS_MIN_IDLE_CONNS:-4}
       - REDIS_ENABLE_TLS=${REDIS_ENABLE_TLS:-false}
+      - LOCAL_REDIS_ENABLED=${LOCAL_REDIS_ENABLED:-true}
+      - LOCAL_REDIS_MAXMEMORY=${LOCAL_REDIS_MAXMEMORY:-128mb}
+      - LOCAL_REDIS_MAXMEMORY_POLICY=${LOCAL_REDIS_MAXMEMORY_POLICY:-allkeys-lru}
+      - LOCAL_REDIS_APPENDONLY=${LOCAL_REDIS_APPENDONLY:-no}
 
       # =======================================================================
       # Admin Account (auto-created on first run)

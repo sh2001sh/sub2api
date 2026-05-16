@@ -9,9 +9,11 @@ docker run -d \
   --name sub2api \
   -p 8080:8080 \
   -e DATABASE_URL="postgres://user:pass@host:5432/sub2api" \
-  -e REDIS_URL="redis://host:6379" \
   s2644752646/sub2api:latest
 ```
+
+By default, the image auto-starts an embedded Redis instance when `REDIS_URL`
+is unset and `REDIS_HOST` is local.
 
 ## Docker Compose
 
@@ -25,10 +27,10 @@ services:
       - "8080:8080"
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/sub2api?sslmode=disable
-      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=127.0.0.1
+      - LOCAL_REDIS_ENABLED=true
     depends_on:
       - db
-      - redis
 
   db:
     image: postgres:15-alpine
@@ -39,14 +41,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-
 volumes:
   postgres_data:
-  redis_data:
 ```
 
 ## Environment Variables
@@ -54,7 +50,10 @@ volumes:
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | Yes | - |
-| `REDIS_URL` | Redis connection string | Yes | - |
+| `REDIS_URL` | External Redis connection string | No | - |
+| `REDIS_HOST` | Redis host for embedded/local mode | No | `127.0.0.1` |
+| `LOCAL_REDIS_ENABLED` | Auto-start embedded Redis when no `REDIS_URL` is set | No | `true` |
+| `LOCAL_REDIS_MAXMEMORY` | Embedded Redis maxmemory | No | `128mb` |
 | `PORT` | Server port | No | `8080` |
 | `GIN_MODE` | Gin framework mode (`debug`/`release`) | No | `release` |
 

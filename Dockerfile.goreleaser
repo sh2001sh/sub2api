@@ -22,6 +22,7 @@ RUN apk add --no-cache \
     tzdata \
     curl \
     git \
+    redis \
     su-exec \
     libpq \
     zstd-libs \
