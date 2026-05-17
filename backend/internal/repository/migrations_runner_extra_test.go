@@ -242,10 +242,9 @@ func TestApplyMigrationsFS_ChecksumMismatchRejected(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("001_init.sql").
-		WillReturnRows(sqlmock.NewRows([]string{"checksum"}).AddRow("mismatched-checksum"))
+	prepareMigrationsBootstrapExpectationsWithApplied(mock,
+		sqlmock.NewRows([]string{"filename", "checksum"}).AddRow("001_init.sql", "mismatched-checksum"),
+	)
 	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
 		WithArgs(migrationsAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -264,9 +263,20 @@ func TestApplyMigrationsFS_CheckMigrationQueryError(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("001_err.sql").
+	mock.ExpectQuery("SELECT pg_try_advisory_lock\\(\\$1\\)").
+		WithArgs(migrationsAdvisoryLockID).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS \\(").
+		WithArgs("schema_migrations").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectQuery("SELECT EXISTS \\(").
+		WithArgs("atlas_schema_revisions").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM atlas_schema_revisions").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT filename, checksum FROM schema_migrations").
 		WillReturnError(errors.New("query failed"))
 	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
 		WithArgs(migrationsAdvisoryLockID).
@@ -277,7 +287,7 @@ func TestApplyMigrationsFS_CheckMigrationQueryError(t *testing.T) {
 	}
 	err = applyMigrationsFS(context.Background(), db, fsys)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "check migration 001_err.sql")
+	require.Contains(t, err.Error(), "load applied migrations")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -286,13 +296,11 @@ func TestApplyMigrationsFS_SkipEmptyAndAlreadyApplied(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	prepareMigrationsBootstrapExpectations(mock)
-
 	alreadySQL := "CREATE TABLE t(id int);"
 	checksum := migrationChecksum(alreadySQL)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("001_already.sql").
-		WillReturnRows(sqlmock.NewRows([]string{"checksum"}).AddRow(checksum))
+	prepareMigrationsBootstrapExpectationsWithApplied(mock,
+		sqlmock.NewRows([]string{"filename", "checksum"}).AddRow("001_already.sql", checksum),
+	)
 	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
 		WithArgs(migrationsAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))

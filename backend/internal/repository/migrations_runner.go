@@ -142,6 +142,11 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		return err
 	}
 
+	appliedMigrations, err := loadAppliedMigrations(ctx, db)
+	if err != nil {
+		return fmt.Errorf("load applied migrations: %w", err)
+	}
+
 	// 获取所有 .sql 迁移文件并按文件名排序。
 	// 命名规范：使用零填充数字前缀（如 001_init.sql, 002_add_users.sql）。
 	files, err := fs.Glob(fsys, "*.sql")
@@ -168,9 +173,7 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		checksum := hex.EncodeToString(sum[:])
 
 		// 检查该迁移是否已经应用
-		var existing string
-		rowErr := db.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE filename = $1", name).Scan(&existing)
-		if rowErr == nil {
+		if existing, ok := appliedMigrations[name]; ok {
 			// 迁移已应用，验证校验和是否匹配
 			if existing != checksum {
 				// 兼容特定历史误改场景（仅白名单规则），其余仍保持严格不可变约束。
@@ -190,9 +193,6 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 				)
 			}
 			continue // 迁移已应用且校验和匹配，跳过
-		}
-		if !errors.Is(rowErr, sql.ErrNoRows) {
-			return fmt.Errorf("check migration %s: %w", name, rowErr)
 		}
 
 		nonTx, err := validateMigrationExecutionMode(name, content)
@@ -223,6 +223,7 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 			if _, err := db.ExecContext(ctx, "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)", name, checksum); err != nil {
 				return fmt.Errorf("record migration %s (non-tx): %w", name, err)
 			}
+			appliedMigrations[name] = checksum
 			continue
 		}
 
@@ -249,9 +250,34 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("commit migration %s: %w", name, err)
 		}
+		appliedMigrations[name] = checksum
 	}
 
 	return nil
+}
+
+func loadAppliedMigrations(ctx context.Context, db *sql.DB) (map[string]string, error) {
+	rows, err := db.QueryContext(ctx, "SELECT filename, checksum FROM schema_migrations")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	applied := make(map[string]string)
+	for rows.Next() {
+		var filename string
+		var checksum string
+		if err := rows.Scan(&filename, &checksum); err != nil {
+			return nil, err
+		}
+		applied[filename] = checksum
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return applied, nil
 }
 
 func prepareNonTransactionalMigration(ctx context.Context, db *sql.DB, name string) error {

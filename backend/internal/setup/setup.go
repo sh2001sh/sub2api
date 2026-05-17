@@ -30,6 +30,7 @@ const (
 	InstallLockFile            = ".installed"
 	defaultUserConcurrency     = 5
 	simpleModeAdminConcurrency = 30
+	setupMigrationTimeout      = 3 * time.Minute
 )
 
 func setupDefaultAdminConcurrency() int {
@@ -347,7 +348,7 @@ func initializeDatabase(cfg *SetupConfig) error {
 		}
 	}()
 
-	migrationCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	migrationCtx, cancel := context.WithTimeout(context.Background(), setupMigrationTimeout)
 	defer cancel()
 	return repository.ApplyMigrations(migrationCtx, db)
 }

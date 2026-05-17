@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"testing/fstest"
 
@@ -57,9 +56,6 @@ func TestApplyMigrationsFS_NonTransactionalMigration(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("001_add_idx_notx.sql").
-		WillReturnError(sql.ErrNoRows)
 	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_t_a ON t\\(a\\)").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").
@@ -86,9 +82,6 @@ func TestApplyMigrationsFS_NonTransactionalMigration_MultiStatements(t *testing.
 	defer func() { _ = db.Close() }()
 
 	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("001_add_multi_idx_notx.sql").
-		WillReturnError(sql.ErrNoRows)
 	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_t_a ON t\\(a\\)").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_t_b ON t\\(b\\)").
@@ -122,9 +115,6 @@ func TestApplyMigrationsFS_PaymentOrdersOutTradeNoUniqueMigration_FailsFastOnDup
 	defer func() { _ = db.Close() }()
 
 	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("120_enforce_payment_orders_out_trade_no_unique_notx.sql").
-		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery("SELECT out_trade_no, COUNT\\(\\*\\) AS duplicate_count FROM payment_orders").
 		WillReturnRows(sqlmock.NewRows([]string{"out_trade_no", "duplicate_count"}).AddRow("dup-out-trade-no", 2))
 	mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
@@ -156,9 +146,6 @@ func TestApplyMigrationsFS_PaymentOrdersOutTradeNoUniqueMigration_DropsInvalidIn
 	defer func() { _ = db.Close() }()
 
 	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("120_enforce_payment_orders_out_trade_no_unique_notx.sql").
-		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery("SELECT out_trade_no, COUNT\\(\\*\\) AS duplicate_count FROM payment_orders").
 		WillReturnRows(sqlmock.NewRows([]string{"out_trade_no", "duplicate_count"}))
 	mock.ExpectQuery("SELECT EXISTS \\(").
@@ -200,9 +187,6 @@ func TestApplyMigrationsFS_TransactionalMigration(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
-		WithArgs("001_add_col.sql").
-		WillReturnError(sql.ErrNoRows)
 	mock.ExpectBegin()
 	mock.ExpectExec("ALTER TABLE t ADD COLUMN name TEXT").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -226,6 +210,10 @@ func TestApplyMigrationsFS_TransactionalMigration(t *testing.T) {
 }
 
 func prepareMigrationsBootstrapExpectations(mock sqlmock.Sqlmock) {
+	prepareMigrationsBootstrapExpectationsWithApplied(mock, sqlmock.NewRows([]string{"filename", "checksum"}))
+}
+
+func prepareMigrationsBootstrapExpectationsWithApplied(mock sqlmock.Sqlmock, appliedRows *sqlmock.Rows) {
 	mock.ExpectQuery("SELECT pg_try_advisory_lock\\(\\$1\\)").
 		WithArgs(migrationsAdvisoryLockID).
 		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
@@ -239,4 +227,6 @@ func prepareMigrationsBootstrapExpectations(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM atlas_schema_revisions").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT filename, checksum FROM schema_migrations").
+		WillReturnRows(appliedRows)
 }
