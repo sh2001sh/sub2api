@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -531,6 +533,81 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 	return defaultValue
 }
 
+func parseDatabaseURL(raw string) (*DatabaseConfig, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, fmt.Errorf("parse DATABASE_URL: %w", err)
+	}
+	if parsed.Scheme != "postgres" && parsed.Scheme != "postgresql" {
+		return nil, fmt.Errorf("unsupported database scheme: %s", parsed.Scheme)
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("database host is empty")
+	}
+
+	port := 5432
+	if rawPort := parsed.Port(); rawPort != "" {
+		parsedPort, convErr := strconv.Atoi(rawPort)
+		if convErr != nil {
+			return nil, fmt.Errorf("invalid database port: %w", convErr)
+		}
+		port = parsedPort
+	}
+
+	user := ""
+	password := ""
+	if parsed.User != nil {
+		user = parsed.User.Username()
+		password, _ = parsed.User.Password()
+	}
+
+	dbName := strings.TrimPrefix(parsed.Path, "/")
+	if dbName == "" {
+		return nil, fmt.Errorf("database name is empty")
+	}
+
+	sslMode := parsed.Query().Get("sslmode")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	return &DatabaseConfig{
+		Host:     host,
+		Port:     port,
+		User:     user,
+		Password: password,
+		DBName:   dbName,
+		SSLMode:  sslMode,
+	}, nil
+}
+
+func parseRedisURL(raw string) (*RedisConfig, error) {
+	opts, err := redis.ParseURL(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_URL: %w", err)
+	}
+
+	host, portStr, err := net.SplitHostPort(opts.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redis address: %w", err)
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redis port: %w", err)
+	}
+
+	return &RedisConfig{
+		Host:      host,
+		Port:      port,
+		Password:  opts.Password,
+		DB:        opts.DB,
+		EnableTLS: opts.TLSConfig != nil,
+	}, nil
+}
+
 // AutoSetupFromEnv performs automatic setup using environment variables
 // This is designed for Docker deployment where all config is passed via env vars
 func AutoSetupFromEnv() error {
@@ -543,23 +620,45 @@ func AutoSetupFromEnv() error {
 		tz = getEnvOrDefault("TIMEZONE", "Asia/Shanghai")
 	}
 
-	// Build config from environment variables
-	cfg := &SetupConfig{
-		Database: DatabaseConfig{
+	var dbCfg DatabaseConfig
+	if rawDatabaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL")); rawDatabaseURL != "" {
+		parsedDatabaseCfg, err := parseDatabaseURL(rawDatabaseURL)
+		if err != nil {
+			return fmt.Errorf("invalid DATABASE_URL: %w", err)
+		}
+		dbCfg = *parsedDatabaseCfg
+	} else {
+		dbCfg = DatabaseConfig{
 			Host:     getEnvOrDefault("DATABASE_HOST", "localhost"),
 			Port:     getEnvIntOrDefault("DATABASE_PORT", 5432),
 			User:     getEnvOrDefault("DATABASE_USER", "postgres"),
 			Password: getEnvOrDefault("DATABASE_PASSWORD", ""),
 			DBName:   getEnvOrDefault("DATABASE_DBNAME", "sub2api"),
 			SSLMode:  getEnvOrDefault("DATABASE_SSLMODE", "disable"),
-		},
-		Redis: RedisConfig{
+		}
+	}
+
+	var redisCfg RedisConfig
+	if rawRedisURL := strings.TrimSpace(getEnvOrDefault("REDIS_URL", "")); rawRedisURL != "" {
+		parsedRedisCfg, err := parseRedisURL(rawRedisURL)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_URL: %w", err)
+		}
+		redisCfg = *parsedRedisCfg
+	} else {
+		redisCfg = RedisConfig{
 			Host:      getEnvOrDefault("REDIS_HOST", "localhost"),
 			Port:      getEnvIntOrDefault("REDIS_PORT", 6379),
 			Password:  getEnvOrDefault("REDIS_PASSWORD", ""),
 			DB:        getEnvIntOrDefault("REDIS_DB", 0),
 			EnableTLS: getEnvOrDefault("REDIS_ENABLE_TLS", "false") == "true",
-		},
+		}
+	}
+
+	// Build config from environment variables
+	cfg := &SetupConfig{
+		Database: dbCfg,
+		Redis:    redisCfg,
 		Admin: AdminConfig{
 			Email:    getEnvOrDefault("ADMIN_EMAIL", "admin@sub2api.local"),
 			Password: getEnvOrDefault("ADMIN_PASSWORD", ""),
