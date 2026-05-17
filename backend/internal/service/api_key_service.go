@@ -20,17 +20,20 @@ import (
 )
 
 var (
-	ErrAPIKeyNotFound     = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
-	ErrGroupNotAllowed    = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
-	ErrAPIKeyExists       = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
-	ErrAPIKeyTooShort     = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
-	ErrAPIKeyInvalidChars = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
-	ErrAPIKeyRateLimited  = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrInvalidIPPattern   = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrAPIKeyNotFound         = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
+	ErrGroupNotAllowed        = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
+	ErrAPIKeyExists           = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
+	ErrAPIKeyTooShort         = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
+	ErrAPIKeyInvalidChars     = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
+	ErrAPIKeyRateLimited      = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrInvalidIPPattern       = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrInvalidModelQuotaLimit = infraerrors.BadRequest("INVALID_MODEL_QUOTA_LIMIT", "invalid model quota limit")
 	// ErrAPIKeyExpired        = infraerrors.Forbidden("API_KEY_EXPIRED", "api key has expired")
 	ErrAPIKeyExpired = infraerrors.Forbidden("API_KEY_EXPIRED", "api key 已过期")
 	// ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key quota exhausted")
 	ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key 额度已用完")
+
+	ErrAPIKeyModelQuotaExhausted = infraerrors.TooManyRequests("API_KEY_MODEL_QUOTA_EXHAUSTED", "api key model quota exhausted")
 
 	// Rate limit errors
 	ErrAPIKeyRateLimit5hExceeded = infraerrors.TooManyRequests("API_KEY_RATE_5H_EXCEEDED", "api key 5小时限额已用完")
@@ -71,6 +74,7 @@ type APIKeyRepository interface {
 
 	// Quota methods
 	IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error)
+	GetModelQuotaState(ctx context.Context, id int64, model string) (*APIKeyModelQuotaState, error)
 	UpdateLastUsed(ctx context.Context, id int64, usedAt time.Time) error
 
 	// Rate limit methods
@@ -156,8 +160,9 @@ type CreateAPIKeyRequest struct {
 	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
-	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
-	ExpiresInDays *int    `json:"expires_in_days"` // Days until expiry (nil = never expires)
+	Quota            float64            `json:"quota"`              // Quota limit in USD (0 = unlimited)
+	ModelQuotaLimits map[string]float64 `json:"model_quota_limits"` // Per-model quota limits in USD
+	ExpiresInDays    *int               `json:"expires_in_days"`    // Days until expiry (nil = never expires)
 
 	// Rate limit fields (0 = unlimited)
 	RateLimit5h float64 `json:"rate_limit_5h"`
@@ -174,10 +179,12 @@ type UpdateAPIKeyRequest struct {
 	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
-	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
-	ExpiresAt       *time.Time `json:"expires_at"`  // Expiration time (nil = no change)
-	ClearExpiration bool       `json:"-"`           // Clear expiration (internal use)
-	ResetQuota      *bool      `json:"reset_quota"` // Reset quota_used to 0
+	Quota                *float64            `json:"quota"`                   // Quota limit in USD (nil = no change, 0 = unlimited)
+	ModelQuotaLimits     *map[string]float64 `json:"model_quota_limits"`      // Per-model quota limits in USD
+	ExpiresAt            *time.Time          `json:"expires_at"`              // Expiration time (nil = no change)
+	ClearExpiration      bool                `json:"-"`                       // Clear expiration (internal use)
+	ResetQuota           *bool               `json:"reset_quota"`             // Reset quota_used to 0
+	ResetModelQuotaUsage *bool               `json:"reset_model_quota_usage"` // Reset model_quota_used to 0
 
 	// Rate limit fields (nil = no change, 0 = unlimited)
 	RateLimit5h         *float64 `json:"rate_limit_5h"`
@@ -396,19 +403,26 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	// 创建API Key记录
+	modelQuotaLimits, err := NormalizeAPIKeyModelQuotaLimits(req.ModelQuotaLimits)
+	if err != nil {
+		return nil, err
+	}
+
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        req.Name,
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		Quota:       req.Quota,
-		QuotaUsed:   0,
-		RateLimit5h: req.RateLimit5h,
-		RateLimit1d: req.RateLimit1d,
-		RateLimit7d: req.RateLimit7d,
+		UserID:           userID,
+		Key:              key,
+		Name:             req.Name,
+		GroupID:          req.GroupID,
+		Status:           StatusActive,
+		IPWhitelist:      req.IPWhitelist,
+		IPBlacklist:      req.IPBlacklist,
+		Quota:            req.Quota,
+		QuotaUsed:        0,
+		ModelQuotaLimits: modelQuotaLimits,
+		ModelQuotaUsed:   nil,
+		RateLimit5h:      req.RateLimit5h,
+		RateLimit1d:      req.RateLimit1d,
+		RateLimit7d:      req.RateLimit7d,
 	}
 
 	// Set expiration time if specified
@@ -576,12 +590,23 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			apiKey.Status = StatusActive
 		}
 	}
+	if req.ModelQuotaLimits != nil {
+		modelQuotaLimits, err := NormalizeAPIKeyModelQuotaLimits(*req.ModelQuotaLimits)
+		if err != nil {
+			return nil, err
+		}
+		apiKey.ModelQuotaLimits = modelQuotaLimits
+		apiKey.ModelQuotaUsed = NormalizeAPIKeyModelQuotaUsed(apiKey.ModelQuotaUsed, modelQuotaLimits)
+	}
 	if req.ResetQuota != nil && *req.ResetQuota {
 		apiKey.QuotaUsed = 0
 		// If resetting quota and status was quota_exhausted, reactivate
 		if apiKey.Status == StatusAPIKeyQuotaExhausted {
 			apiKey.Status = StatusActive
 		}
+	}
+	if req.ResetModelQuotaUsage != nil && *req.ResetModelQuotaUsage {
+		apiKey.ModelQuotaUsed = nil
 	}
 	if req.ClearExpiration {
 		apiKey.ExpiresAt = nil

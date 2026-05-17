@@ -564,6 +564,8 @@ export interface ApiKey {
   last_used_at: string | null
   quota: number // Quota limit in USD (0 = unlimited)
   quota_used: number // Used quota amount in USD
+  model_quota_limits: Record<string, number>
+  model_quota_used: Record<string, number>
   expires_at: string | null // Expiration time (null = never expires)
   created_at: string
   updated_at: string
@@ -589,6 +591,7 @@ export interface CreateApiKeyRequest {
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (0 = unlimited)
+  model_quota_limits?: Record<string, number>
   expires_in_days?: number // Days until expiry (null = never expires)
   rate_limit_5h?: number
   rate_limit_1d?: number
@@ -602,8 +605,10 @@ export interface UpdateApiKeyRequest {
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)
+  model_quota_limits?: Record<string, number>
   expires_at?: string | null // Expiration time (null = no change)
   reset_quota?: boolean // Reset quota_used to 0
+  reset_model_quota_usage?: boolean
   rate_limit_5h?: number
   rate_limit_1d?: number
   rate_limit_7d?: number
@@ -1103,6 +1108,44 @@ export interface AdminDataImportResult {
   account_created: number
   account_failed: number
   errors?: AdminDataImportError[]
+}
+
+export interface CpaPreservedApiKey {
+  name: string
+  key: string
+  sha256: string
+  source: string
+}
+
+export interface CpaSkippedAccount {
+  file_name: string
+  legacy_id?: string
+  name?: string
+  provider?: string
+  reason: string
+  warnings?: string[]
+  proxy_url?: string
+  disabled?: boolean
+  suggested?: string
+}
+
+export interface CpaImportSummary {
+  accounts_seen: number
+  accounts_converted: number
+  accounts_skipped: number
+  proxies_generated: number
+  api_keys_preserved: number
+  warnings_count: number
+  disabled_skipped: number
+  service_account_skipped: number
+}
+
+export interface CpaImportResponse {
+  conversion: CpaImportSummary
+  import: AdminDataImportResult
+  preserved_api_keys: CpaPreservedApiKey[]
+  skipped_accounts: CpaSkippedAccount[]
+  warnings: string[]
 }
 
 export interface CodexSessionImportRequest {

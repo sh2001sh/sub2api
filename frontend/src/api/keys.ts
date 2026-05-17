@@ -64,6 +64,7 @@ export async function create(
   ipWhitelist?: string[],
   ipBlacklist?: string[],
   quota?: number,
+  modelQuotaLimits?: Record<string, number>,
   expiresInDays?: number,
   rateLimitData?: { rate_limit_5h?: number; rate_limit_1d?: number; rate_limit_7d?: number }
 ): Promise<ApiKey> {
@@ -82,6 +83,9 @@ export async function create(
   }
   if (quota !== undefined && quota > 0) {
     payload.quota = quota
+  }
+  if (modelQuotaLimits && Object.keys(modelQuotaLimits).length > 0) {
+    payload.model_quota_limits = modelQuotaLimits
   }
   if (expiresInDays !== undefined && expiresInDays > 0) {
     payload.expires_in_days = expiresInDays

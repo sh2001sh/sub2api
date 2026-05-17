@@ -167,6 +167,12 @@ func TestExtractOutTradeNo(t *testing.T) {
 			want:        "sub2_456",
 		},
 		{
+			name:        "xunhupay query payload",
+			providerKey: payment.TypeXunhuPay,
+			rawBody:     "trade_order_id=sub2_789&status=OD",
+			want:        "sub2_789",
+		},
+		{
 			name:        "unknown provider",
 			providerKey: "wxpay",
 			rawBody:     "{}",

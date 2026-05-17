@@ -52,6 +52,13 @@ func TestValidateProviderRequest(t *testing.T) {
 			wantErr:        false,
 		},
 		{
+			name:           "valid xunhupay provider",
+			providerKey:    payment.TypeXunhuPay,
+			providerName:   "XunhuPay Provider",
+			supportedTypes: payment.TypeAlipay + "," + payment.TypeWxpay,
+			wantErr:        false,
+		},
+		{
 			name:           "valid alipay provider",
 			providerKey:    "alipay",
 			providerName:   "Alipay Direct",
@@ -157,6 +164,11 @@ func TestIsSensitiveProviderConfigField(t *testing.T) {
 		{payment.TypeAirwallex, "apiBase", false},
 		{payment.TypeAirwallex, "accountId", false},
 		{payment.TypeAirwallex, "currency", false},
+
+		// XunhuPay
+		{payment.TypeXunhuPay, "appSecret", true},
+		{payment.TypeXunhuPay, "appId", false},
+		{payment.TypeXunhuPay, "apiBase", false},
 
 		// Unknown provider: never sensitive
 		{"unknown", "secretKey", false},
@@ -632,6 +644,8 @@ func providerPendingOrderPaymentType(providerKey string) string {
 		return payment.TypeAlipay
 	case payment.TypeAirwallex:
 		return payment.TypeAirwallex
+	case payment.TypeXunhuPay:
+		return payment.TypeAlipay
 	case payment.TypeStripe:
 		return payment.TypeStripe
 	default:
@@ -687,6 +701,18 @@ func validAirwallexProviderConfig(t *testing.T) map[string]string {
 		"apiBase":       "https://api-demo.airwallex.com/api/v1",
 		"accountId":     "acct-test",
 		"currency":      "CNY",
+	}
+}
+
+func validXunhuPayProviderConfig(t *testing.T) map[string]string {
+	t.Helper()
+
+	return map[string]string{
+		"appId":     "xunhu-app-test",
+		"appSecret": "xunhu-secret-test",
+		"apiBase":   "https://api.xunhupay.com/payment",
+		"notifyUrl": "https://merchant.example.com/xunhupay/notify",
+		"returnUrl": "https://merchant.example.com/xunhupay/return",
 	}
 }
 

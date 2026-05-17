@@ -178,6 +178,19 @@ func validateProviderSnapshotMetadata(order *dbent.PaymentOrder, providerKey str
 				return fmt.Errorf("alipay app_id mismatch: expected %s, got %s", expected, actual)
 			}
 		}
+	case payment.TypeXunhuPay:
+		if expected := strings.TrimSpace(snapshot.MerchantAppID); expected != "" {
+			actual := strings.TrimSpace(metadata["appid"])
+			if actual == "" {
+				return fmt.Errorf("xunhupay appid missing")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("xunhupay appid mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+		if actual := strings.TrimSpace(metadata["status"]); actual != "" && !strings.EqualFold(actual, "OD") {
+			return fmt.Errorf("xunhupay status mismatch: expected OD, got %s", actual)
+		}
 	case payment.TypeEasyPay:
 		if expected := strings.TrimSpace(snapshot.MerchantID); expected != "" {
 			actual := strings.TrimSpace(metadata["pid"])

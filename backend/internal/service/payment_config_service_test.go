@@ -207,6 +207,7 @@ func TestGetBasePaymentType(t *testing.T) {
 		expected string
 	}{
 		{payment.TypeEasyPay, payment.TypeEasyPay},
+		{payment.TypeXunhuPay, payment.TypeXunhuPay},
 		{payment.TypeStripe, payment.TypeStripe},
 		{payment.TypeCard, payment.TypeStripe},
 		{payment.TypeLink, payment.TypeStripe},
@@ -286,6 +287,7 @@ func TestBuildVisibleMethodSourceAvailability(t *testing.T) {
 	instances := []*dbent.PaymentProviderInstance{
 		{ProviderKey: payment.TypeAlipay, SupportedTypes: "alipay"},
 		{ProviderKey: payment.TypeEasyPay, SupportedTypes: "wxpay_direct, alipay"},
+		{ProviderKey: payment.TypeXunhuPay, SupportedTypes: "alipay,wxpay"},
 		{ProviderKey: payment.TypeWxpay, SupportedTypes: "wxpay_direct"},
 	}
 
@@ -296,11 +298,17 @@ func TestBuildVisibleMethodSourceAvailability(t *testing.T) {
 	if !got[VisibleMethodSourceEasyPayAlipay] {
 		t.Fatalf("expected %q to be available", VisibleMethodSourceEasyPayAlipay)
 	}
+	if !got[VisibleMethodSourceXunhuPayAlipay] {
+		t.Fatalf("expected %q to be available", VisibleMethodSourceXunhuPayAlipay)
+	}
 	if !got[VisibleMethodSourceOfficialWechat] {
 		t.Fatalf("expected %q to be available", VisibleMethodSourceOfficialWechat)
 	}
 	if !got[VisibleMethodSourceEasyPayWechat] {
 		t.Fatalf("expected %q to be available", VisibleMethodSourceEasyPayWechat)
+	}
+	if !got[VisibleMethodSourceXunhuPayWechat] {
+		t.Fatalf("expected %q to be available", VisibleMethodSourceXunhuPayWechat)
 	}
 }
 

@@ -8020,7 +8020,10 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
 	}
 	if usageLog != nil {
-		cmd.Model = usageLog.Model
+		cmd.Model = strings.TrimSpace(usageLog.RequestedModel)
+		if cmd.Model == "" {
+			cmd.Model = usageLog.Model
+		}
 		cmd.BillingType = usageLog.BillingType
 		cmd.InputTokens = usageLog.InputTokens
 		cmd.OutputTokens = usageLog.OutputTokens

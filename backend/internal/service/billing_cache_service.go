@@ -78,22 +78,23 @@ type cacheWriteTask struct {
 	subscriptionData *subscriptionCacheData
 }
 
-// apiKeyRateLimitLoader defines the interface for loading rate limit data from DB.
-type apiKeyRateLimitLoader interface {
+// apiKeyBillingLoader defines the interface for loading API key billing state from DB.
+type apiKeyBillingLoader interface {
 	GetRateLimitData(ctx context.Context, keyID int64) (*APIKeyRateLimitData, error)
+	GetModelQuotaState(ctx context.Context, keyID int64, model string) (*APIKeyModelQuotaState, error)
 }
 
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
-	cache                 BillingCache
-	userRepo              UserRepository
-	subRepo               UserSubscriptionRepository
-	apiKeyRateLimitLoader apiKeyRateLimitLoader
-	userRPMCache          UserRPMCache
-	userGroupRateRepo     UserGroupRateRepository
-	cfg                   *config.Config
-	circuitBreaker        *billingCircuitBreaker
+	cache               BillingCache
+	userRepo            UserRepository
+	subRepo             UserSubscriptionRepository
+	apiKeyBillingLoader apiKeyBillingLoader
+	userRPMCache        UserRPMCache
+	userGroupRateRepo   UserGroupRateRepository
+	cfg                 *config.Config
+	circuitBreaker      *billingCircuitBreaker
 
 	cacheWriteChan     chan cacheWriteTask
 	cacheWriteWg       sync.WaitGroup
@@ -119,13 +120,13 @@ func NewBillingCacheService(
 	cfg *config.Config,
 ) *BillingCacheService {
 	svc := &BillingCacheService{
-		cache:                 cache,
-		userRepo:              userRepo,
-		subRepo:               subRepo,
-		apiKeyRateLimitLoader: apiKeyRepo,
-		userRPMCache:          userRPMCache,
-		userGroupRateRepo:     userGroupRateRepo,
-		cfg:                   cfg,
+		cache:               cache,
+		userRepo:            userRepo,
+		subRepo:             subRepo,
+		apiKeyBillingLoader: apiKeyRepo,
+		userRPMCache:        userRPMCache,
+		userGroupRateRepo:   userGroupRateRepo,
+		cfg:                 cfg,
 	}
 	svc.circuitBreaker = newBillingCircuitBreaker(cfg.Billing.CircuitBreaker)
 	svc.startCacheWriteWorkers()
@@ -531,10 +532,10 @@ func (s *BillingCacheService) InvalidateAPIKeyRateLimit(ctx context.Context, key
 func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey *APIKey) error {
 	if s.cache == nil {
 		// No cache: fall back to reading from DB directly
-		if s.apiKeyRateLimitLoader == nil {
+		if s.apiKeyBillingLoader == nil {
 			return nil
 		}
-		data, err := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
+		data, err := s.apiKeyBillingLoader.GetRateLimitData(ctx, apiKey.ID)
 		if err != nil {
 			return nil // Don't block requests on DB errors
 		}
@@ -545,10 +546,10 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 	cacheData, err := s.cache.GetAPIKeyRateLimit(ctx, apiKey.ID)
 	if err != nil {
 		// Cache miss: load from DB and populate cache
-		if s.apiKeyRateLimitLoader == nil {
+		if s.apiKeyBillingLoader == nil {
 			return nil
 		}
-		dbData, dbErr := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
+		dbData, dbErr := s.apiKeyBillingLoader.GetRateLimitData(ctx, apiKey.ID)
 		if dbErr != nil {
 			return nil // Don't block requests on DB errors
 		}
@@ -611,9 +612,9 @@ func (s *BillingCacheService) evaluateRateLimits(ctx context.Context, apiKey *AP
 		go func() {
 			resetCtx, cancel := context.WithTimeout(context.Background(), cacheWriteTimeout)
 			defer cancel()
-			if s.apiKeyRateLimitLoader != nil {
+			if s.apiKeyBillingLoader != nil {
 				// Use the repo directly - reset then reload cache
-				if loader, ok := s.apiKeyRateLimitLoader.(interface {
+				if loader, ok := s.apiKeyBillingLoader.(interface {
 					ResetRateLimitWindows(ctx context.Context, id int64) error
 				}); ok {
 					if err := loader.ResetRateLimitWindows(resetCtx, keyID); err != nil {
@@ -655,6 +656,36 @@ func (s *BillingCacheService) QueueUpdateAPIKeyRateLimitUsage(apiKeyID int64, co
 	})
 }
 
+func (s *BillingCacheService) checkAPIKeyModelQuota(ctx context.Context, apiKey *APIKey, requestedModel string) error {
+	if apiKey == nil || !apiKey.HasModelQuotaLimits() {
+		return nil
+	}
+
+	model := NormalizeAPIKeyModelQuotaKey(requestedModel)
+	if model == "" {
+		return nil
+	}
+
+	limit, configured := apiKey.ModelQuotaLimitFor(model)
+	if !configured {
+		return nil
+	}
+
+	used := apiKey.ModelQuotaUsedFor(model)
+	if s.apiKeyBillingLoader != nil {
+		state, err := s.apiKeyBillingLoader.GetModelQuotaState(ctx, apiKey.ID, model)
+		if err == nil && state != nil {
+			limit = state.Limit
+			used = state.Used
+		}
+	}
+
+	if limit > 0 && used >= limit {
+		return ErrAPIKeyModelQuotaExhausted
+	}
+	return nil
+}
+
 // ============================================
 // 统一检查方法
 // ============================================
@@ -662,7 +693,7 @@ func (s *BillingCacheService) QueueUpdateAPIKeyRateLimitUsage(apiKeyID int64, co
 // CheckBillingEligibility 检查用户是否有资格发起请求
 // 余额模式：检查缓存余额 > 0
 // 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
-func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription) error {
+func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, requestedModel string) error {
 	// 简易模式：跳过所有计费检查
 	if s.cfg.RunMode == config.RunModeSimple {
 		return nil
@@ -687,6 +718,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	// Check API Key rate limits (applies to both billing modes)
 	if apiKey != nil && apiKey.HasRateLimits() {
 		if err := s.checkAPIKeyRateLimits(ctx, apiKey); err != nil {
+			return err
+		}
+	}
+	if apiKey != nil {
+		if err := s.checkAPIKeyModelQuota(ctx, apiKey, requestedModel); err != nil {
 			return err
 		}
 	}

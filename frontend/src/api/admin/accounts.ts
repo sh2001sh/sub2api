@@ -16,6 +16,7 @@ import type {
   TempUnschedulableStatus,
   AdminDataPayload,
   AdminDataImportResult,
+  CpaImportResponse,
   CodexSessionImportRequest,
   CodexSessionImportResult,
   CheckMixedChannelRequest,
@@ -549,6 +550,22 @@ export async function importData(payload: {
   return data
 }
 
+export async function importCpaData(payload: {
+  files: File[]
+  skip_default_group_bind?: boolean
+}): Promise<CpaImportResponse> {
+  const formData = new FormData()
+  for (const file of payload.files) {
+    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+    formData.append('files', file, relativePath)
+  }
+  if (payload.skip_default_group_bind !== undefined) {
+    formData.append('skip_default_group_bind', String(payload.skip_default_group_bind))
+  }
+  const { data } = await apiClient.post<CpaImportResponse>('/admin/accounts/import/cpa', formData)
+  return data
+}
+
 export async function importCodexSession(payload: CodexSessionImportRequest): Promise<CodexSessionImportResult> {
   const { data } = await apiClient.post<CodexSessionImportResult>('/admin/accounts/import/codex-session', payload)
   return data
@@ -670,6 +687,7 @@ export const accountsAPI = {
   syncFromCrs,
   exportData,
   importData,
+  importCpaData,
   importCodexSession,
   getAntigravityDefaultModelMapping,
   batchClearError,

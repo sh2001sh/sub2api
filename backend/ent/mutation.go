@@ -116,6 +116,8 @@ type APIKeyMutation struct {
 	addquota           *float64
 	quota_used         *float64
 	addquota_used      *float64
+	model_quota_limits *map[string]float64
+	model_quota_used   *map[string]float64
 	expires_at         *time.Time
 	rate_limit_5h      *float64
 	addrate_limit_5h   *float64
@@ -848,6 +850,104 @@ func (m *APIKeyMutation) ResetQuotaUsed() {
 	m.addquota_used = nil
 }
 
+// SetModelQuotaLimits sets the "model_quota_limits" field.
+func (m *APIKeyMutation) SetModelQuotaLimits(value map[string]float64) {
+	m.model_quota_limits = &value
+}
+
+// ModelQuotaLimits returns the value of the "model_quota_limits" field in the mutation.
+func (m *APIKeyMutation) ModelQuotaLimits() (r map[string]float64, exists bool) {
+	v := m.model_quota_limits
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelQuotaLimits returns the old "model_quota_limits" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldModelQuotaLimits(ctx context.Context) (v map[string]float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelQuotaLimits is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelQuotaLimits requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelQuotaLimits: %w", err)
+	}
+	return oldValue.ModelQuotaLimits, nil
+}
+
+// ClearModelQuotaLimits clears the value of the "model_quota_limits" field.
+func (m *APIKeyMutation) ClearModelQuotaLimits() {
+	m.model_quota_limits = nil
+	m.clearedFields[apikey.FieldModelQuotaLimits] = struct{}{}
+}
+
+// ModelQuotaLimitsCleared returns if the "model_quota_limits" field was cleared in this mutation.
+func (m *APIKeyMutation) ModelQuotaLimitsCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldModelQuotaLimits]
+	return ok
+}
+
+// ResetModelQuotaLimits resets all changes to the "model_quota_limits" field.
+func (m *APIKeyMutation) ResetModelQuotaLimits() {
+	m.model_quota_limits = nil
+	delete(m.clearedFields, apikey.FieldModelQuotaLimits)
+}
+
+// SetModelQuotaUsed sets the "model_quota_used" field.
+func (m *APIKeyMutation) SetModelQuotaUsed(value map[string]float64) {
+	m.model_quota_used = &value
+}
+
+// ModelQuotaUsed returns the value of the "model_quota_used" field in the mutation.
+func (m *APIKeyMutation) ModelQuotaUsed() (r map[string]float64, exists bool) {
+	v := m.model_quota_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelQuotaUsed returns the old "model_quota_used" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldModelQuotaUsed(ctx context.Context) (v map[string]float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelQuotaUsed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelQuotaUsed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelQuotaUsed: %w", err)
+	}
+	return oldValue.ModelQuotaUsed, nil
+}
+
+// ClearModelQuotaUsed clears the value of the "model_quota_used" field.
+func (m *APIKeyMutation) ClearModelQuotaUsed() {
+	m.model_quota_used = nil
+	m.clearedFields[apikey.FieldModelQuotaUsed] = struct{}{}
+}
+
+// ModelQuotaUsedCleared returns if the "model_quota_used" field was cleared in this mutation.
+func (m *APIKeyMutation) ModelQuotaUsedCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldModelQuotaUsed]
+	return ok
+}
+
+// ResetModelQuotaUsed resets all changes to the "model_quota_used" field.
+func (m *APIKeyMutation) ResetModelQuotaUsed() {
+	m.model_quota_used = nil
+	delete(m.clearedFields, apikey.FieldModelQuotaUsed)
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (m *APIKeyMutation) SetExpiresAt(t time.Time) {
 	m.expires_at = &t
@@ -1522,7 +1622,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1561,6 +1661,12 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.quota_used != nil {
 		fields = append(fields, apikey.FieldQuotaUsed)
+	}
+	if m.model_quota_limits != nil {
+		fields = append(fields, apikey.FieldModelQuotaLimits)
+	}
+	if m.model_quota_used != nil {
+		fields = append(fields, apikey.FieldModelQuotaUsed)
 	}
 	if m.expires_at != nil {
 		fields = append(fields, apikey.FieldExpiresAt)
@@ -1626,6 +1732,10 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Quota()
 	case apikey.FieldQuotaUsed:
 		return m.QuotaUsed()
+	case apikey.FieldModelQuotaLimits:
+		return m.ModelQuotaLimits()
+	case apikey.FieldModelQuotaUsed:
+		return m.ModelQuotaUsed()
 	case apikey.FieldExpiresAt:
 		return m.ExpiresAt()
 	case apikey.FieldRateLimit5h:
@@ -1681,6 +1791,10 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldQuota(ctx)
 	case apikey.FieldQuotaUsed:
 		return m.OldQuotaUsed(ctx)
+	case apikey.FieldModelQuotaLimits:
+		return m.OldModelQuotaLimits(ctx)
+	case apikey.FieldModelQuotaUsed:
+		return m.OldModelQuotaUsed(ctx)
 	case apikey.FieldExpiresAt:
 		return m.OldExpiresAt(ctx)
 	case apikey.FieldRateLimit5h:
@@ -1800,6 +1914,20 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetQuotaUsed(v)
+		return nil
+	case apikey.FieldModelQuotaLimits:
+		v, ok := value.(map[string]float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelQuotaLimits(v)
+		return nil
+	case apikey.FieldModelQuotaUsed:
+		v, ok := value.(map[string]float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelQuotaUsed(v)
 		return nil
 	case apikey.FieldExpiresAt:
 		v, ok := value.(time.Time)
@@ -2015,6 +2143,12 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldIPBlacklist) {
 		fields = append(fields, apikey.FieldIPBlacklist)
 	}
+	if m.FieldCleared(apikey.FieldModelQuotaLimits) {
+		fields = append(fields, apikey.FieldModelQuotaLimits)
+	}
+	if m.FieldCleared(apikey.FieldModelQuotaUsed) {
+		fields = append(fields, apikey.FieldModelQuotaUsed)
+	}
 	if m.FieldCleared(apikey.FieldExpiresAt) {
 		fields = append(fields, apikey.FieldExpiresAt)
 	}
@@ -2055,6 +2189,12 @@ func (m *APIKeyMutation) ClearField(name string) error {
 		return nil
 	case apikey.FieldIPBlacklist:
 		m.ClearIPBlacklist()
+		return nil
+	case apikey.FieldModelQuotaLimits:
+		m.ClearModelQuotaLimits()
+		return nil
+	case apikey.FieldModelQuotaUsed:
+		m.ClearModelQuotaUsed()
 		return nil
 	case apikey.FieldExpiresAt:
 		m.ClearExpiresAt()
@@ -2114,6 +2254,12 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldQuotaUsed:
 		m.ResetQuotaUsed()
+		return nil
+	case apikey.FieldModelQuotaLimits:
+		m.ResetModelQuotaLimits()
+		return nil
+	case apikey.FieldModelQuotaUsed:
+		m.ResetModelQuotaUsed()
 		return nil
 	case apikey.FieldExpiresAt:
 		m.ResetExpiresAt()

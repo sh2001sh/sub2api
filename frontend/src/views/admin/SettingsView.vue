@@ -6156,6 +6156,7 @@ import Select from "@/components/common/Select.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
+import { PROVIDER_SUPPORTED_TYPES } from "@/components/payment/providerConfig";
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";
@@ -8342,13 +8343,16 @@ const providerKeyOptions = computed(() => [
   { value: "easypay", label: t("admin.settings.payment.providerEasypay") },
   { value: "alipay", label: t("admin.settings.payment.providerAlipay") },
   { value: "wxpay", label: t("admin.settings.payment.providerWxpay") },
+  { value: "xunhupay", label: t("admin.settings.payment.providerXunhupay") },
   { value: "stripe", label: t("admin.settings.payment.providerStripe") },
   { value: "airwallex", label: t("admin.settings.payment.providerAirwallex") },
 ]);
 
 const enabledProviderKeyOptions = computed(() => {
-  const enabled = form.payment_enabled_types;
-  return providerKeyOptions.value.filter((opt) => enabled.includes(opt.value));
+  const enabled = new Set(form.payment_enabled_types);
+  return providerKeyOptions.value.filter((opt) =>
+    (PROVIDER_SUPPORTED_TYPES[opt.value] ?? []).some((type) => enabled.has(type)),
+  );
 });
 
 const loadBalanceOptions = computed(() => [

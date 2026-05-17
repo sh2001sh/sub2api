@@ -126,6 +126,9 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return err
 		}
 		result.APIKeyQuotaExhausted = exhausted
+		if err := incrementUsageBillingAPIKeyModelQuota(ctx, tx, cmd.APIKeyID, cmd.Model, cmd.APIKeyQuotaCost); err != nil {
+			return err
+		}
 	}
 
 	if cmd.APIKeyRateLimitCost > 0 {
@@ -229,6 +232,40 @@ func incrementUsageBillingAPIKeyRateLimit(ctx context.Context, tx *sql.Tx, apiKe
 			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 	`, cost, apiKeyID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+func incrementUsageBillingAPIKeyModelQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, model string, amount float64) error {
+	model = service.NormalizeAPIKeyModelQuotaKey(model)
+	if model == "" || amount <= 0 {
+		return nil
+	}
+
+	res, err := tx.ExecContext(ctx, `
+		UPDATE api_keys
+		SET
+			model_quota_used = CASE
+				WHEN COALESCE((model_quota_limits ->> $2)::numeric, 0) > 0
+				THEN COALESCE(model_quota_used, '{}'::jsonb)
+					|| jsonb_build_object(
+						$2,
+						COALESCE((COALESCE(model_quota_used, '{}'::jsonb) ->> $2)::numeric, 0) + $1
+					)
+				ELSE COALESCE(model_quota_used, '{}'::jsonb)
+			END,
+			updated_at = NOW()
+		WHERE id = $3 AND deleted_at IS NULL
+	`, amount, model, apiKeyID)
 	if err != nil {
 		return err
 	}

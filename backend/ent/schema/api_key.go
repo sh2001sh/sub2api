@@ -69,6 +69,12 @@ func (APIKey) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0).
 			Comment("Used quota amount in USD"),
+		field.JSON("model_quota_limits", map[string]float64{}).
+			Optional().
+			Comment("Per-model quota limits in USD keyed by requested model"),
+		field.JSON("model_quota_used", map[string]float64{}).
+			Optional().
+			Comment("Per-model used quota in USD keyed by requested model"),
 		// Expiration time (nil = never expires)
 		field.Time("expires_at").
 			Optional().

@@ -685,6 +685,26 @@ func QuotaUsedLTE(v float64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldLTE(FieldQuotaUsed, v))
 }
 
+// ModelQuotaLimitsIsNil applies the IsNil predicate on the "model_quota_limits" field.
+func ModelQuotaLimitsIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldModelQuotaLimits))
+}
+
+// ModelQuotaLimitsNotNil applies the NotNil predicate on the "model_quota_limits" field.
+func ModelQuotaLimitsNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldModelQuotaLimits))
+}
+
+// ModelQuotaUsedIsNil applies the IsNil predicate on the "model_quota_used" field.
+func ModelQuotaUsedIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldModelQuotaUsed))
+}
+
+// ModelQuotaUsedNotNil applies the NotNil predicate on the "model_quota_used" field.
+func ModelQuotaUsedNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldModelQuotaUsed))
+}
+
 // ExpiresAtEQ applies the EQ predicate on the "expires_at" field.
 func ExpiresAtEQ(v time.Time) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldExpiresAt, v))

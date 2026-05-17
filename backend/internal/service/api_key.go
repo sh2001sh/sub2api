@@ -46,9 +46,11 @@ type APIKey struct {
 	Group               *Group
 
 	// Quota fields
-	Quota     float64    // Quota limit in USD (0 = unlimited)
-	QuotaUsed float64    // Used quota amount
-	ExpiresAt *time.Time // Expiration time (nil = never expires)
+	Quota            float64            // Quota limit in USD (0 = unlimited)
+	QuotaUsed        float64            // Used quota amount
+	ModelQuotaLimits map[string]float64 // Per-model quota limits in USD
+	ModelQuotaUsed   map[string]float64 // Per-model used quota in USD
+	ExpiresAt        *time.Time         // Expiration time (nil = never expires)
 
 	// Rate limit fields
 	RateLimit5h   float64    // Rate limit in USD per 5h (0 = unlimited)

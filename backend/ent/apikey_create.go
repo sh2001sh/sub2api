@@ -167,6 +167,18 @@ func (_c *APIKeyCreate) SetNillableQuotaUsed(v *float64) *APIKeyCreate {
 	return _c
 }
 
+// SetModelQuotaLimits sets the "model_quota_limits" field.
+func (_c *APIKeyCreate) SetModelQuotaLimits(v map[string]float64) *APIKeyCreate {
+	_c.mutation.SetModelQuotaLimits(v)
+	return _c
+}
+
+// SetModelQuotaUsed sets the "model_quota_used" field.
+func (_c *APIKeyCreate) SetModelQuotaUsed(v map[string]float64) *APIKeyCreate {
+	_c.mutation.SetModelQuotaUsed(v)
+	return _c
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_c *APIKeyCreate) SetExpiresAt(v time.Time) *APIKeyCreate {
 	_c.mutation.SetExpiresAt(v)
@@ -555,6 +567,14 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 		_spec.SetField(apikey.FieldQuotaUsed, field.TypeFloat64, value)
 		_node.QuotaUsed = value
 	}
+	if value, ok := _c.mutation.ModelQuotaLimits(); ok {
+		_spec.SetField(apikey.FieldModelQuotaLimits, field.TypeJSON, value)
+		_node.ModelQuotaLimits = value
+	}
+	if value, ok := _c.mutation.ModelQuotaUsed(); ok {
+		_spec.SetField(apikey.FieldModelQuotaUsed, field.TypeJSON, value)
+		_node.ModelQuotaUsed = value
+	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(apikey.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
@@ -880,6 +900,42 @@ func (u *APIKeyUpsert) UpdateQuotaUsed() *APIKeyUpsert {
 // AddQuotaUsed adds v to the "quota_used" field.
 func (u *APIKeyUpsert) AddQuotaUsed(v float64) *APIKeyUpsert {
 	u.Add(apikey.FieldQuotaUsed, v)
+	return u
+}
+
+// SetModelQuotaLimits sets the "model_quota_limits" field.
+func (u *APIKeyUpsert) SetModelQuotaLimits(v map[string]float64) *APIKeyUpsert {
+	u.Set(apikey.FieldModelQuotaLimits, v)
+	return u
+}
+
+// UpdateModelQuotaLimits sets the "model_quota_limits" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateModelQuotaLimits() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldModelQuotaLimits)
+	return u
+}
+
+// ClearModelQuotaLimits clears the value of the "model_quota_limits" field.
+func (u *APIKeyUpsert) ClearModelQuotaLimits() *APIKeyUpsert {
+	u.SetNull(apikey.FieldModelQuotaLimits)
+	return u
+}
+
+// SetModelQuotaUsed sets the "model_quota_used" field.
+func (u *APIKeyUpsert) SetModelQuotaUsed(v map[string]float64) *APIKeyUpsert {
+	u.Set(apikey.FieldModelQuotaUsed, v)
+	return u
+}
+
+// UpdateModelQuotaUsed sets the "model_quota_used" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateModelQuotaUsed() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldModelQuotaUsed)
+	return u
+}
+
+// ClearModelQuotaUsed clears the value of the "model_quota_used" field.
+func (u *APIKeyUpsert) ClearModelQuotaUsed() *APIKeyUpsert {
+	u.SetNull(apikey.FieldModelQuotaUsed)
 	return u
 }
 
@@ -1322,6 +1378,48 @@ func (u *APIKeyUpsertOne) AddQuotaUsed(v float64) *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) UpdateQuotaUsed() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateQuotaUsed()
+	})
+}
+
+// SetModelQuotaLimits sets the "model_quota_limits" field.
+func (u *APIKeyUpsertOne) SetModelQuotaLimits(v map[string]float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelQuotaLimits(v)
+	})
+}
+
+// UpdateModelQuotaLimits sets the "model_quota_limits" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateModelQuotaLimits() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelQuotaLimits()
+	})
+}
+
+// ClearModelQuotaLimits clears the value of the "model_quota_limits" field.
+func (u *APIKeyUpsertOne) ClearModelQuotaLimits() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearModelQuotaLimits()
+	})
+}
+
+// SetModelQuotaUsed sets the "model_quota_used" field.
+func (u *APIKeyUpsertOne) SetModelQuotaUsed(v map[string]float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelQuotaUsed(v)
+	})
+}
+
+// UpdateModelQuotaUsed sets the "model_quota_used" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateModelQuotaUsed() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelQuotaUsed()
+	})
+}
+
+// ClearModelQuotaUsed clears the value of the "model_quota_used" field.
+func (u *APIKeyUpsertOne) ClearModelQuotaUsed() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearModelQuotaUsed()
 	})
 }
 
@@ -1960,6 +2058,48 @@ func (u *APIKeyUpsertBulk) AddQuotaUsed(v float64) *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) UpdateQuotaUsed() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateQuotaUsed()
+	})
+}
+
+// SetModelQuotaLimits sets the "model_quota_limits" field.
+func (u *APIKeyUpsertBulk) SetModelQuotaLimits(v map[string]float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelQuotaLimits(v)
+	})
+}
+
+// UpdateModelQuotaLimits sets the "model_quota_limits" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateModelQuotaLimits() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelQuotaLimits()
+	})
+}
+
+// ClearModelQuotaLimits clears the value of the "model_quota_limits" field.
+func (u *APIKeyUpsertBulk) ClearModelQuotaLimits() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearModelQuotaLimits()
+	})
+}
+
+// SetModelQuotaUsed sets the "model_quota_used" field.
+func (u *APIKeyUpsertBulk) SetModelQuotaUsed(v map[string]float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetModelQuotaUsed(v)
+	})
+}
+
+// UpdateModelQuotaUsed sets the "model_quota_used" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateModelQuotaUsed() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateModelQuotaUsed()
+	})
+}
+
+// ClearModelQuotaUsed clears the value of the "model_quota_used" field.
+func (u *APIKeyUpsertBulk) ClearModelQuotaUsed() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearModelQuotaUsed()
 	})
 }
 

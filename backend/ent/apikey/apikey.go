@@ -41,6 +41,10 @@ const (
 	FieldQuota = "quota"
 	// FieldQuotaUsed holds the string denoting the quota_used field in the database.
 	FieldQuotaUsed = "quota_used"
+	// FieldModelQuotaLimits holds the string denoting the model_quota_limits field in the database.
+	FieldModelQuotaLimits = "model_quota_limits"
+	// FieldModelQuotaUsed holds the string denoting the model_quota_used field in the database.
+	FieldModelQuotaUsed = "model_quota_used"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldRateLimit5h holds the string denoting the rate_limit_5h field in the database.
@@ -108,6 +112,8 @@ var Columns = []string{
 	FieldIPBlacklist,
 	FieldQuota,
 	FieldQuotaUsed,
+	FieldModelQuotaLimits,
+	FieldModelQuotaUsed,
 	FieldExpiresAt,
 	FieldRateLimit5h,
 	FieldRateLimit1d,

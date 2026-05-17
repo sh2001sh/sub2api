@@ -424,6 +424,15 @@ func buildVisibleMethodSourceAvailability(instances []*dbent.PaymentProviderInst
 					available[VisibleMethodSourceEasyPayWechat] = true
 				}
 			}
+		case payment.TypeXunhuPay:
+			for _, supportedType := range splitTypes(inst.SupportedTypes) {
+				switch NormalizeVisibleMethod(supportedType) {
+				case payment.TypeAlipay:
+					available[VisibleMethodSourceXunhuPayAlipay] = true
+				case payment.TypeWxpay:
+					available[VisibleMethodSourceXunhuPayWechat] = true
+				}
+			}
 		}
 	}
 	return available

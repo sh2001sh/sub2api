@@ -173,6 +173,9 @@
                   />
                 </div>
               </div>
+              <div v-if="countModelQuotaLimits(row) > 0" class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('keys.modelQuotaConfiguredCount', { count: countModelQuotaLimits(row) }) }}
+              </div>
             </div>
           </template>
 
@@ -593,6 +596,86 @@
           </div>
         </div>
 
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="input-label mb-0">{{ t('keys.modelQuotaSection') }}</label>
+            <button type="button" class="btn btn-secondary text-sm" @click="addModelQuotaRow">
+              {{ t('keys.modelQuotaAdd') }}
+            </button>
+          </div>
+          <p class="input-hint">{{ t('keys.modelQuotaHint') }}</p>
+
+          <div v-if="formData.model_quota_rows.length === 0" class="rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
+            {{ t('keys.modelQuotaEmpty') }}
+          </div>
+
+          <div v-else class="space-y-3">
+            <div
+              v-for="(row, index) in formData.model_quota_rows"
+              :key="`model-quota-${index}`"
+              class="rounded-xl border border-gray-200 p-3 dark:border-dark-600"
+            >
+              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-start">
+                <div>
+                  <label class="input-label">{{ t('keys.modelQuotaModelLabel') }}</label>
+                  <input
+                    v-model="row.model"
+                    type="text"
+                    class="input"
+                    :placeholder="t('keys.modelQuotaModelPlaceholder')"
+                  />
+                  <div
+                    v-if="showEditModal && selectedKey && row.model.trim() && selectedKey.model_quota_used?.[row.model.trim()] > 0"
+                    class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('keys.modelQuotaUsedLabel') }}:
+                    <span class="font-medium text-gray-900 dark:text-white">
+                      ${{ selectedKey.model_quota_used[row.model.trim()].toFixed(4) }}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label class="input-label">{{ t('keys.modelQuotaLimitLabel') }}</label>
+                  <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      v-model.number="row.limit"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="input pl-7"
+                      :placeholder="t('keys.modelQuotaLimitPlaceholder')"
+                    />
+                  </div>
+                </div>
+                <div class="flex items-end justify-end">
+                  <button
+                    type="button"
+                    class="btn btn-secondary text-sm"
+                    @click="removeModelQuotaRow(index)"
+                  >
+                    {{ t('common.delete') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="showEditModal && selectedKey && countModelQuotaLimits(selectedKey) > 0" class="flex flex-wrap items-center gap-3">
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              {{ t('keys.modelQuotaConfiguredCount', { count: countModelQuotaLimits(selectedKey) }) }}
+            </div>
+            <button
+              v-if="hasModelQuotaUsage(selectedKey)"
+              type="button"
+              class="btn btn-secondary text-sm"
+              @click="showResetModelQuotaDialog = true"
+            >
+              {{ t('keys.resetModelQuotaUsage') }}
+            </button>
+          </div>
+        </div>
+
         <!-- Rate Limit Section -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
@@ -908,6 +991,17 @@
       @cancel="showResetQuotaDialog = false"
     />
 
+    <ConfirmDialog
+      :show="showResetModelQuotaDialog"
+      :title="t('keys.resetModelQuotaTitle')"
+      :message="t('keys.resetModelQuotaConfirmMessage', { name: selectedKey?.name })"
+      :confirm-text="t('keys.reset')"
+      :cancel-text="t('common.cancel')"
+      :danger="true"
+      @confirm="resetModelQuotaUsage"
+      @cancel="showResetModelQuotaDialog = false"
+    />
+
     <!-- Reset Rate Limit Confirmation Dialog -->
     <ConfirmDialog
       :show="showResetRateLimitDialog"
@@ -1095,6 +1189,16 @@ interface GroupOption {
   platform: GroupPlatform
 }
 
+interface ModelQuotaRow {
+  model: string
+  limit: number | null
+}
+
+const createEmptyModelQuotaRow = (): ModelQuotaRow => ({
+  model: '',
+  limit: null
+})
+
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
@@ -1141,6 +1245,7 @@ const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteDialog = ref(false)
 const showResetQuotaDialog = ref(false)
+const showResetModelQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
@@ -1180,6 +1285,7 @@ const formData = ref({
   // Quota settings (empty = unlimited)
   enable_quota: false,
   quota: null as number | null,
+  model_quota_rows: [] as ModelQuotaRow[],
   // Rate limit settings
   enable_rate_limit: false,
   rate_limit_5h: null as number | null,
@@ -1205,6 +1311,65 @@ const customKeyError = computed(() => {
   }
   return ''
 })
+
+const modelQuotaRowsFromKey = (key: ApiKey): ModelQuotaRow[] => {
+  const limits = key.model_quota_limits || {}
+  const used = key.model_quota_used || {}
+  const rows = Object.keys(limits)
+    .sort()
+    .map((model) => ({
+      model,
+      limit: typeof limits[model] === 'number' && limits[model] > 0 ? limits[model] : null
+    }))
+  if (rows.length > 0) {
+    return rows
+  }
+  const usedModels = Object.keys(used).filter((model) => typeof used[model] === 'number' && used[model] > 0)
+  if (usedModels.length > 0) {
+    return usedModels.sort().map((model) => ({ model, limit: null }))
+  }
+  return []
+}
+
+const normalizeModelQuotaRows = (rows: ModelQuotaRow[]) => {
+  const normalized: Record<string, number> = {}
+  for (const row of rows) {
+    const model = row.model.trim()
+    const limit = row.limit
+    const hasModel = model.length > 0
+    const hasLimit = typeof limit === 'number' && Number.isFinite(limit)
+
+    if (!hasModel && !hasLimit) {
+      continue
+    }
+    if (!hasModel) {
+      return { data: null, error: t('keys.modelQuotaValidationIncomplete') }
+    }
+    if (!hasLimit || limit === null || limit <= 0) {
+      return { data: null, error: t('keys.modelQuotaValidationLimit') }
+    }
+    if (normalized[model] !== undefined) {
+      return { data: null, error: t('keys.modelQuotaValidationDuplicate', { model }) }
+    }
+    normalized[model] = limit
+  }
+  return { data: normalized, error: '' }
+}
+
+const countModelQuotaLimits = (key: ApiKey): number => Object.keys(key.model_quota_limits || {}).length
+
+const hasModelQuotaUsage = (key: ApiKey | null): boolean => {
+  if (!key) return false
+  return Object.values(key.model_quota_used || {}).some((value) => typeof value === 'number' && value > 0)
+}
+
+const addModelQuotaRow = () => {
+  formData.value.model_quota_rows.push(createEmptyModelQuotaRow())
+}
+
+const removeModelQuotaRow = (index: number) => {
+  formData.value.model_quota_rows.splice(index, 1)
+}
 
 const statusOptions = computed(() => [
   { value: 'active', label: t('common.active') },
@@ -1402,6 +1567,7 @@ const editKey = (key: ApiKey) => {
     ip_blacklist: (key.ip_blacklist || []).join('\n'),
     enable_quota: key.quota > 0,
     quota: key.quota > 0 ? key.quota : null,
+    model_quota_rows: modelQuotaRowsFromKey(key),
     enable_rate_limit: (key.rate_limit_5h > 0) || (key.rate_limit_1d > 0) || (key.rate_limit_7d > 0),
     rate_limit_5h: key.rate_limit_5h || null,
     rate_limit_1d: key.rate_limit_1d || null,
@@ -1512,6 +1678,11 @@ const handleSubmit = async () => {
 
   // Calculate quota value (null/empty/0 = unlimited, stored as 0)
   const quota = formData.value.quota && formData.value.quota > 0 ? formData.value.quota : 0
+  const { data: modelQuotaLimits, error: modelQuotaError } = normalizeModelQuotaRows(formData.value.model_quota_rows)
+  if (modelQuotaError || !modelQuotaLimits) {
+    appStore.showError(modelQuotaError || t('keys.failedToSave'))
+    return
+  }
 
   // Calculate expiration
   let expiresInDays: number | undefined
@@ -1549,6 +1720,7 @@ const handleSubmit = async () => {
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
+        model_quota_limits: modelQuotaLimits,
         expires_at: expiresAt,
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
@@ -1564,6 +1736,7 @@ const handleSubmit = async () => {
         ipWhitelist,
         ipBlacklist,
         quota,
+        modelQuotaLimits,
         expiresInDays,
         rateLimitData
       )
@@ -1619,6 +1792,7 @@ const closeModals = () => {
     ip_blacklist: '',
     enable_quota: false,
     quota: null,
+    model_quota_rows: [],
     enable_rate_limit: false,
     rate_limit_5h: null,
     rate_limit_1d: null,
@@ -1655,6 +1829,24 @@ const resetQuotaUsed = async () => {
     }
   } catch (error: any) {
     const errorMsg = error.response?.data?.detail || t('keys.failedToResetQuota')
+    appStore.showError(errorMsg)
+  }
+}
+
+const resetModelQuotaUsage = async () => {
+  if (!selectedKey.value) return
+  showResetModelQuotaDialog.value = false
+  try {
+    await keysAPI.update(selectedKey.value.id, { reset_model_quota_usage: true })
+    appStore.showSuccess(t('keys.modelQuotaResetSuccess'))
+    await loadApiKeys()
+    const refreshedKey = apiKeys.value.find((k) => k.id === selectedKey.value!.id)
+    if (refreshedKey) {
+      selectedKey.value = refreshedKey
+      formData.value.model_quota_rows = modelQuotaRowsFromKey(refreshedKey)
+    }
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.detail || t('keys.failedToResetModelQuota')
     appStore.showError(errorMsg)
   }
 }

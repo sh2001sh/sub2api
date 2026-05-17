@@ -54,6 +54,10 @@ pnpm-debug.log*
 *.env
 !.env.example
 docker-compose.override.yml
+deploy/.env.docker-test
+deploy/.env.localtest
+deploy/.tmp-docker-test/
+deploy/docker-compose.test-override.yml
 
 # ===================
 # IDE / 编辑器

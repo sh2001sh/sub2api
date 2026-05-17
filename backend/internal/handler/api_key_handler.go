@@ -28,15 +28,16 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 	}
 }
 
-// CreateAPIKeyRequest represents the create API key request payload
+// CreateAPIKeyRequest represents the create API key request payload.
 type CreateAPIKeyRequest struct {
-	Name          string   `json:"name" binding:"required"`
-	GroupID       *int64   `json:"group_id"`        // nullable
-	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
-	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
-	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
-	Quota         *float64 `json:"quota"`           // 配额限制 (USD)
-	ExpiresInDays *int     `json:"expires_in_days"` // 过期天数
+	Name             string             `json:"name" binding:"required"`
+	GroupID          *int64             `json:"group_id"`
+	CustomKey        *string            `json:"custom_key"`
+	IPWhitelist      []string           `json:"ip_whitelist"`
+	IPBlacklist      []string           `json:"ip_blacklist"`
+	Quota            *float64           `json:"quota"`
+	ModelQuotaLimits map[string]float64 `json:"model_quota_limits"`
+	ExpiresInDays    *int               `json:"expires_in_days"`
 
 	// Rate limit fields (0 = unlimited)
 	RateLimit5h *float64 `json:"rate_limit_5h"`
@@ -44,22 +45,24 @@ type CreateAPIKeyRequest struct {
 	RateLimit7d *float64 `json:"rate_limit_7d"`
 }
 
-// UpdateAPIKeyRequest represents the update API key request payload
+// UpdateAPIKeyRequest represents the update API key request payload.
 type UpdateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	Status      string   `json:"status" binding:"omitempty,oneof=active inactive"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
-	Quota       *float64 `json:"quota"`        // 配额限制 (USD), 0=无限制
-	ExpiresAt   *string  `json:"expires_at"`   // 过期时间 (ISO 8601)
-	ResetQuota  *bool    `json:"reset_quota"`  // 重置已用配额
+	Name                 string             `json:"name"`
+	GroupID              *int64             `json:"group_id"`
+	Status               string             `json:"status" binding:"omitempty,oneof=active inactive"`
+	IPWhitelist          []string           `json:"ip_whitelist"`
+	IPBlacklist          []string           `json:"ip_blacklist"`
+	Quota                *float64           `json:"quota"`
+	ModelQuotaLimits     map[string]float64 `json:"model_quota_limits"`
+	ExpiresAt            *string            `json:"expires_at"`
+	ResetQuota           *bool              `json:"reset_quota"`
+	ResetModelQuotaUsage *bool              `json:"reset_model_quota_usage"`
 
 	// Rate limit fields (nil = no change, 0 = unlimited)
 	RateLimit5h         *float64 `json:"rate_limit_5h"`
 	RateLimit1d         *float64 `json:"rate_limit_1d"`
 	RateLimit7d         *float64 `json:"rate_limit_7d"`
-	ResetRateLimitUsage *bool    `json:"reset_rate_limit_usage"` // 重置限速用量
+	ResetRateLimitUsage *bool    `json:"reset_rate_limit_usage"`
 }
 
 // List handles listing user's API keys with pagination
@@ -79,7 +82,6 @@ func (h *APIKeyHandler) List(c *gin.Context) {
 		SortOrder: c.DefaultQuery("sort_order", "desc"),
 	}
 
-	// Parse filter parameters
 	var filters service.APIKeyListFilters
 	if search := strings.TrimSpace(c.Query("search")); search != "" {
 		if len(search) > 100 {
@@ -129,7 +131,6 @@ func (h *APIKeyHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	// 验证所有权
 	if key.UserID != subject.UserID {
 		response.Forbidden(c, "Not authorized to access this key")
 		return
@@ -154,12 +155,13 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 	}
 
 	svcReq := service.CreateAPIKeyRequest{
-		Name:          req.Name,
-		GroupID:       req.GroupID,
-		CustomKey:     req.CustomKey,
-		IPWhitelist:   req.IPWhitelist,
-		IPBlacklist:   req.IPBlacklist,
-		ExpiresInDays: req.ExpiresInDays,
+		Name:             req.Name,
+		GroupID:          req.GroupID,
+		CustomKey:        req.CustomKey,
+		IPWhitelist:      req.IPWhitelist,
+		IPBlacklist:      req.IPBlacklist,
+		ModelQuotaLimits: req.ModelQuotaLimits,
+		ExpiresInDays:    req.ExpiresInDays,
 	}
 	if req.Quota != nil {
 		svcReq.Quota = *req.Quota
@@ -205,14 +207,19 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateAPIKeyRequest{
-		IPWhitelist:         req.IPWhitelist,
-		IPBlacklist:         req.IPBlacklist,
-		Quota:               req.Quota,
-		ResetQuota:          req.ResetQuota,
-		RateLimit5h:         req.RateLimit5h,
-		RateLimit1d:         req.RateLimit1d,
-		RateLimit7d:         req.RateLimit7d,
-		ResetRateLimitUsage: req.ResetRateLimitUsage,
+		IPWhitelist:          req.IPWhitelist,
+		IPBlacklist:          req.IPBlacklist,
+		Quota:                req.Quota,
+		ResetQuota:           req.ResetQuota,
+		ResetModelQuotaUsage: req.ResetModelQuotaUsage,
+		RateLimit5h:          req.RateLimit5h,
+		RateLimit1d:          req.RateLimit1d,
+		RateLimit7d:          req.RateLimit7d,
+		ResetRateLimitUsage:  req.ResetRateLimitUsage,
+	}
+	if req.ModelQuotaLimits != nil {
+		modelQuotaLimits := req.ModelQuotaLimits
+		svcReq.ModelQuotaLimits = &modelQuotaLimits
 	}
 	if req.Name != "" {
 		svcReq.Name = &req.Name
@@ -221,10 +228,8 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 	if req.Status != "" {
 		svcReq.Status = &req.Status
 	}
-	// Parse expires_at if provided
 	if req.ExpiresAt != nil {
 		if *req.ExpiresAt == "" {
-			// Empty string means clear expiration
 			svcReq.ExpiresAt = nil
 			svcReq.ClearExpiration = true
 		} else {
@@ -270,7 +275,7 @@ func (h *APIKeyHandler) Delete(c *gin.Context) {
 	response.Success(c, gin.H{"message": "API key deleted successfully"})
 }
 
-// GetAvailableGroups 获取用户可以绑定的分组列表
+// GetAvailableGroups gets groups the current user can bind to.
 // GET /api/v1/groups/available
 func (h *APIKeyHandler) GetAvailableGroups(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
@@ -292,7 +297,7 @@ func (h *APIKeyHandler) GetAvailableGroups(c *gin.Context) {
 	response.Success(c, out)
 }
 
-// GetUserGroupRates 获取当前用户的专属分组倍率配置
+// GetUserGroupRates gets effective user-specific group rate multipliers.
 // GET /api/v1/groups/rates
 func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
