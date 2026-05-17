@@ -293,33 +293,56 @@ func Install(cfg *SetupConfig) error {
 	}
 
 	// Test connections
+	logger.LegacyPrintf("setup", "%s", "Testing database connection...")
 	if err := TestDatabaseConnection(&cfg.Database); err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
+	logger.LegacyPrintf("setup", "%s", "Database connection successful")
 
+	logger.LegacyPrintf("setup", "%s", "Testing Redis connection...")
 	if err := TestRedisConnection(&cfg.Redis); err != nil {
 		return fmt.Errorf("redis connection failed: %w", err)
 	}
+	logger.LegacyPrintf("setup", "%s", "Redis connection successful")
 
 	// Initialize database
+	logger.LegacyPrintf("setup", "%s", "Initializing database...")
 	if err := initializeDatabase(cfg); err != nil {
 		return fmt.Errorf("database initialization failed: %w", err)
 	}
+	logger.LegacyPrintf("setup", "%s", "Database initialized successfully")
 
 	// Create admin user (only when database is empty and no admin exists).
-	if _, _, err := createAdminUser(cfg); err != nil {
+	logger.LegacyPrintf("setup", "%s", "Creating admin user...")
+	created, reason, err := createAdminUser(cfg)
+	if err != nil {
 		return fmt.Errorf("admin user creation failed: %w", err)
+	}
+	if created {
+		logger.LegacyPrintf("setup", "Admin user created: %s", cfg.Admin.Email)
+	} else {
+		switch reason {
+		case adminBootstrapReasonAdminExists:
+			logger.LegacyPrintf("setup", "%s", "Admin user already exists, skipping admin bootstrap")
+		case adminBootstrapReasonUsersExistWithoutAdmin:
+			logger.LegacyPrintf("setup", "%s", "Database already has user data; skipping auto admin bootstrap to avoid password overwrite")
+		default:
+			logger.LegacyPrintf("setup", "%s", "Admin bootstrap skipped")
+		}
 	}
 
 	// Write config file
+	logger.LegacyPrintf("setup", "%s", "Writing configuration file...")
 	if err := writeConfigFile(cfg); err != nil {
 		return fmt.Errorf("config file creation failed: %w", err)
 	}
+	logger.LegacyPrintf("setup", "%s", "Configuration file created")
 
 	// Create installation lock file to prevent re-setup attacks
 	if err := createInstallLock(); err != nil {
 		return fmt.Errorf("failed to create install lock: %w", err)
 	}
+	logger.LegacyPrintf("setup", "%s", "Installation lock created")
 
 	return nil
 }

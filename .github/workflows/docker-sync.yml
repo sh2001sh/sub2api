@@ -18,6 +18,9 @@ env:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    concurrency:
+      group: docker-sync-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -62,10 +65,12 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ steps.prep.outputs.version }}
             COMMIT=${{ github.sha }}
