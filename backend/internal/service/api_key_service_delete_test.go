@@ -292,3 +292,6 @@ func TestApiKeyService_Delete_DeleteFails(t *testing.T) {
 	require.Equal(t, []int64{3}, cache.invalidated) // 验证缓存已被清除（即使删除失败）
 	require.Equal(t, []string{svc.authCacheKey("k")}, cache.deleteAuthKeys)
 }
+func (s *apiKeyRepoStub) GetModelQuotaState(ctx context.Context, id int64, model string) (*APIKeyModelQuotaState, error) {
+	panic("unexpected GetModelQuotaState call")
+}

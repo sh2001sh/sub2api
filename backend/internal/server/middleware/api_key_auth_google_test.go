@@ -104,6 +104,9 @@ func (f fakeAPIKeyRepo) ResetRateLimitWindows(ctx context.Context, id int64) err
 func (f fakeAPIKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
 	return &service.APIKeyRateLimitData{}, nil
 }
+func (f fakeAPIKeyRepo) GetModelQuotaState(ctx context.Context, id int64, model string) (*service.APIKeyModelQuotaState, error) {
+	return nil, nil
+}
 func (f fakeAPIKeyRepo) UpdateGroupIDByUserAndGroup(ctx context.Context, userID, oldGroupID, newGroupID int64) (int64, error) {
 	return 0, errors.New("not implemented")
 }

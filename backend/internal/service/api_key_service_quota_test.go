@@ -171,3 +171,6 @@ func TestAPIKeyService_UpdateQuotaUsed_UsesAtomicStatePath(t *testing.T) {
 	require.Equal(t, 0, repo.getByIDCalls, "fast path should not re-read API key by id")
 	require.Equal(t, []string{svc.authCacheKey("sk-test-quota")}, cache.deleteAuthKeys)
 }
+func (s *quotaBaseAPIKeyRepoStub) GetModelQuotaState(context.Context, int64, string) (*APIKeyModelQuotaState, error) {
+	panic("unexpected GetModelQuotaState call")
+}

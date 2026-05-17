@@ -118,6 +118,9 @@ func (s *authRepoStub) ResetRateLimitWindows(ctx context.Context, id int64) erro
 func (s *authRepoStub) GetRateLimitData(ctx context.Context, id int64) (*APIKeyRateLimitData, error) {
 	panic("unexpected GetRateLimitData call")
 }
+func (s *authRepoStub) GetModelQuotaState(ctx context.Context, id int64, model string) (*APIKeyModelQuotaState, error) {
+	panic("unexpected GetModelQuotaState call")
+}
 
 type authCacheStub struct {
 	getAuthCache   func(ctx context.Context, key string) (*APIKeyAuthCacheEntry, error)

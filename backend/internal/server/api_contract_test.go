@@ -208,6 +208,8 @@ func TestAPIContracts(t *testing.T) {
 					"ip_whitelist": null,
 					"ip_blacklist": null,
 					"last_used_at": null,
+					"model_quota_limits": null,
+					"model_quota_used": null,
 					"quota": 0,
 					"quota_used": 0,
 					"rate_limit_5h": 0,
@@ -257,6 +259,8 @@ func TestAPIContracts(t *testing.T) {
 							"ip_whitelist": null,
 							"ip_blacklist": null,
 							"last_used_at": null,
+							"model_quota_limits": null,
+							"model_quota_used": null,
 							"quota": 0,
 							"quota_used": 0,
 							"rate_limit_5h": 0,
@@ -2148,6 +2152,9 @@ func (r *stubApiKeyRepo) ResetRateLimitWindows(ctx context.Context, id int64) er
 	return nil
 }
 func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
+	return nil, nil
+}
+func (r *stubApiKeyRepo) GetModelQuotaState(ctx context.Context, id int64, model string) (*service.APIKeyModelQuotaState, error) {
 	return nil, nil
 }
 

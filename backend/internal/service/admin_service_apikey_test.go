@@ -184,6 +184,9 @@ func (s *apiKeyRepoStubForGroupUpdate) ResetRateLimitWindows(context.Context, in
 func (s *apiKeyRepoStubForGroupUpdate) GetRateLimitData(context.Context, int64) (*APIKeyRateLimitData, error) {
 	panic("unexpected")
 }
+func (s *apiKeyRepoStubForGroupUpdate) GetModelQuotaState(context.Context, int64, string) (*APIKeyModelQuotaState, error) {
+	return nil, nil
+}
 func (s *apiKeyRepoStubForGroupUpdate) UpdateGroupIDByUserAndGroup(context.Context, int64, int64, int64) (int64, error) {
 	panic("unexpected")
 }
