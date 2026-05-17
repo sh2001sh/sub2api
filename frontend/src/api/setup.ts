@@ -12,6 +12,10 @@ const setupClient = axios.create({
   }
 })
 
+const SETUP_STATUS_TIMEOUT_MS = 10000
+const SETUP_TEST_TIMEOUT_MS = 60000
+const SETUP_INSTALL_TIMEOUT_MS = 180000
+
 export interface SetupStatus {
   needs_setup: boolean
   step: string
@@ -61,7 +65,9 @@ export interface InstallResponse {
  * Get setup status
  */
 export async function getSetupStatus(): Promise<SetupStatus> {
-  const response = await setupClient.get('/setup/status')
+  const response = await setupClient.get('/setup/status', {
+    timeout: SETUP_STATUS_TIMEOUT_MS
+  })
   return response.data.data
 }
 
@@ -69,20 +75,26 @@ export async function getSetupStatus(): Promise<SetupStatus> {
  * Test database connection
  */
 export async function testDatabase(config: DatabaseConfig): Promise<void> {
-  await setupClient.post('/setup/test-db', config)
+  await setupClient.post('/setup/test-db', config, {
+    timeout: SETUP_TEST_TIMEOUT_MS
+  })
 }
 
 /**
  * Test Redis connection
  */
 export async function testRedis(config: RedisConfig): Promise<void> {
-  await setupClient.post('/setup/test-redis', config)
+  await setupClient.post('/setup/test-redis', config, {
+    timeout: SETUP_TEST_TIMEOUT_MS
+  })
 }
 
 /**
  * Perform installation
  */
 export async function install(config: InstallRequest): Promise<InstallResponse> {
-  const response = await setupClient.post('/setup/install', config)
+  const response = await setupClient.post('/setup/install', config, {
+    timeout: SETUP_INSTALL_TIMEOUT_MS
+  })
   return response.data.data
 }
